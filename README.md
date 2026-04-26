@@ -1,6 +1,6 @@
 # ZHD Elementor Blocks
 
-ZHD Elementor Blocks is a custom WordPress plugin that extends Elementor with reusable CRO-focused widgets, bundled template starters, design tokens, and GitHub-based update support.
+ZHD Elementor Blocks is a custom WordPress plugin that extends Elementor with reusable CRO-focused widgets, bundled template starters, AI-assisted presets, and GitHub-based update support.
 
 ## Current scope
 
@@ -11,9 +11,9 @@ ZHD Elementor Blocks is a custom WordPress plugin that extends Elementor with re
   - `Product Buy Box`
   - `Trust Badges`
 - Custom Elementor category: `ZHD CRO Blocks`
-- Global design tokens surfaced as CSS custom properties
+- Elementor/theme-native styling defaults
 - Bundled local Elementor JSON templates
-- Admin area for overview, templates, design system, updates, and tools
+- Admin area for overview, templates, settings, updates, and tools
 - Public GitHub Releases updater
 - Safe AI schema layer for future OpenAI-assisted layout generation and preset storage
 - Direct OpenAI Responses API generation from a brief, with structured-output validation before saving
@@ -51,7 +51,7 @@ Open `ZHD Blocks` in WordPress admin to access:
 
 - `Overview`: dependency status, installed widgets, version details
 - `Templates`: import bundled Elementor JSON templates
-- `Design System`: manage global design tokens and AI-ready plugin settings
+- `Settings`: manage operational plugin settings like AI and updater preferences
 - `AI Studio`: inspect the safe schema, validate structured payloads, and save AI-safe presets
 - `Updates`: inspect GitHub release metadata used for updates
 - `Tools`: clear caches and export a debug snapshot
@@ -66,8 +66,8 @@ Recommended release flow:
 
 1. Bump the plugin version.
 2. Tag the release as `vX.Y.Z`.
-3. Publish a GitHub Release.
-4. The GitHub Actions workflow builds `zhd-elementor-blocks.zip` automatically and attaches it to the release.
+3. Push the tag to GitHub.
+4. The GitHub Actions workflow creates the GitHub Release automatically, builds `zhd-elementor-blocks.zip`, and attaches it to the release.
 5. Install the plugin from that release ZIP on the first site install, then future releases can be updated directly from WordPress.
 
 ## Direct WordPress updates
@@ -88,5 +88,5 @@ This repo now supports WordPress-native updates from GitHub Releases.
 
 - Add the second widget wave: testimonial, FAQ, CTA banner, COA section, benefits, bundle offer
 - Test the bundled JSON templates against a live Elementor site
-- Publish the first tagged GitHub Release
+- Push the first tagged release and verify the workflow-created GitHub Release
 - Add automated PHPUnit/WordPress integration tests once a local WP test harness is in place

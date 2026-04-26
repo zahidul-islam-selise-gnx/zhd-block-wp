@@ -317,7 +317,7 @@ final class AI
     public function generate_preset_from_brief(array $input)
     {
         if (! $this->is_generation_configured()) {
-            return new WP_Error('zhd_ai_not_configured', __('OpenAI generation is not configured yet. Add an API key or a proxy endpoint in the Design System settings first.', ZHD_EB_TEXT_DOMAIN));
+            return new WP_Error('zhd_ai_not_configured', __('OpenAI generation is not configured yet. Add an API key or a proxy endpoint in the plugin settings first.', ZHD_EB_TEXT_DOMAIN));
         }
 
         $brief = sanitize_textarea_field((string) ($input['brief'] ?? ''));
@@ -619,26 +619,18 @@ final class AI
 
     private function build_user_prompt(string $brief, string $business_context, string $cta_goal): string
     {
-        $tokens = $this->settings->get_tokens();
-
         return wp_json_encode(
             array(
                 'task'             => 'Generate a safe ZHD layout preset from this brief.',
                 'brief'            => $brief,
                 'business_context' => $business_context,
                 'cta_goal'         => $cta_goal,
-                'design_tokens'    => array(
-                    'primary_color'   => $tokens['primary_color'],
-                    'secondary_color' => $tokens['secondary_color'],
-                    'accent_color'    => $tokens['accent_color'],
-                    'font_heading'    => $tokens['font_heading'],
-                    'font_body'       => $tokens['font_body'],
-                ),
                 'rules'            => array(
                     'Do not invent unsupported widgets.',
                     'Do not output raw Elementor JSON.',
                     'Use valid URLs or empty strings for URL fields.',
                     'Use manual_product_id 0 when no manual product is intended.',
+                    'Assume visual defaults should inherit from Elementor global styles or the active theme.',
                 ),
             ),
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES

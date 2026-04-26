@@ -48,6 +48,177 @@
   font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
 
+.zhd-eb-template-grid {
+  display: grid;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.zhd-eb-template-card {
+  overflow: hidden;
+  border: 1px solid rgba(36, 107, 255, 0.1);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 16px 42px rgba(22, 44, 82, 0.08);
+}
+
+.zhd-eb-template-card__preview {
+  position: relative;
+  aspect-ratio: 1.55 / 1;
+  border-bottom: 1px solid rgba(36, 107, 255, 0.08);
+  background: linear-gradient(180deg, #f9fbff, #eef5ff);
+}
+
+.zhd-eb-template-card__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.zhd-eb-template-card__placeholder {
+  position: absolute;
+  inset: 0;
+  padding: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(15, 183, 255, 0.22), transparent 26%),
+    radial-gradient(circle at left bottom, rgba(36, 107, 255, 0.14), transparent 28%),
+    linear-gradient(145deg, #ffffff, #eef5ff);
+}
+
+.zhd-eb-template-card__chrome {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.zhd-eb-template-card__chrome span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(36, 107, 255, 0.2);
+}
+
+.zhd-eb-template-card__layout {
+  display: grid;
+  gap: 12px;
+}
+
+.zhd-eb-template-card__row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.zhd-eb-template-card__layout--product-single-biotech .zhd-eb-template-card__row:first-of-type {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.zhd-eb-template-card__block {
+  border: 1px solid rgba(36, 107, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 10px 24px rgba(36, 107, 255, 0.05);
+}
+
+.zhd-eb-template-card__block--hero {
+  min-height: 108px;
+  background:
+    linear-gradient(135deg, rgba(36, 107, 255, 0.12), rgba(15, 183, 255, 0.12)),
+    rgba(255, 255, 255, 0.96);
+}
+
+.zhd-eb-template-card__block--sm {
+  min-height: 58px;
+}
+
+.zhd-eb-template-card__block--md {
+  min-height: 78px;
+}
+
+.zhd-eb-template-card__label {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 18px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(11, 29, 54, 0.78);
+  color: #fff;
+  font-weight: 700;
+  backdrop-filter: blur(10px);
+}
+
+.zhd-eb-template-card__body {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+}
+
+.zhd-eb-template-card__header {
+  display: grid;
+  gap: 6px;
+}
+
+.zhd-eb-template-card__header h3 {
+  margin: 0;
+  color: #0b1d36;
+  font-size: 1.06rem;
+}
+
+.zhd-eb-template-card__header code {
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: #f2f7ff;
+  color: #5f7699;
+}
+
+.zhd-eb-template-card__body p {
+  margin: 0;
+  color: #5d718f;
+  line-height: 1.65;
+}
+
+.zhd-eb-template-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.zhd-eb-template-card__chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(36, 107, 255, 0.08);
+  color: #2c4d75;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.zhd-eb-template-card__footer {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.zhd-eb-template-card__button {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid rgba(36, 107, 255, 0.14);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffffff, #f4f8ff);
+  color: #1f5ed9;
+  box-shadow: 0 8px 18px rgba(36, 107, 255, 0.08);
+}
+
+.zhd-eb-template-card__button:hover,
+.zhd-eb-template-card__button:focus {
+  border-color: rgba(36, 107, 255, 0.3);
+  color: #154bb5;
+}
+
 .zhd-eb-ai-studio {
   display: grid;
   gap: 24px;
@@ -360,6 +531,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .zhd-eb-template-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .zhd-eb-ai-layout {
     grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.8fr);
     align-items: start;
@@ -380,6 +555,11 @@
   .zhd-eb-admin .zhd-eb-card {
     padding: 18px;
     border-radius: 22px;
+  }
+
+  .zhd-eb-template-card,
+  .zhd-eb-template-card__preview {
+    border-radius: 20px;
   }
 
   .zhd-eb-ai-hero,

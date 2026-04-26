@@ -23,7 +23,7 @@ final class Plugin
         $dependencies = new Dependencies();
         $settings     = new Settings();
         $ai           = new AI($settings);
-        $assets       = new Assets($settings);
+        $assets       = new Assets();
         $templates    = new Templates($dependencies);
         $widgets      = new WidgetsLoader($dependencies);
         $updater      = new Updater($settings);

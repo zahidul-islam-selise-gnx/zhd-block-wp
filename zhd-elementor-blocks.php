@@ -2,8 +2,8 @@
 /**
  * Plugin Name: ZHD Elementor Blocks
  * Plugin URI:  https://github.com/zahidul-islam-selise-gnx/zhd-block-wp
- * Description: CRO-focused Elementor widgets, bundled templates, design tokens, and GitHub-powered updates for client delivery.
- * Version:     1.0.0
+ * Description: CRO-focused Elementor widgets, bundled templates, AI-powered presets, and GitHub-powered updates for client delivery.
+ * Version:     1.0.1
  * Author:      Z. Islam
  * Author URI:  https://zahidui.com
  * Text Domain: zhd-elementor-blocks
@@ -21,7 +21,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('ZHD_EB_VERSION', '1.0.0');
+define('ZHD_EB_VERSION', '1.0.1');
 define('ZHD_EB_SCHEMA_VERSION', '1');
 define('ZHD_EB_PLUGIN_SLUG', 'zhd-elementor-blocks');
 define('ZHD_EB_PLUGIN_FILE', __FILE__);
@@ -29,7 +29,6 @@ define('ZHD_EB_PLUGIN_BASENAME', plugin_basename(__FILE__));
 define('ZHD_EB_PLUGIN_PATH', plugin_dir_path(__FILE__));
 define('ZHD_EB_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('ZHD_EB_TEXT_DOMAIN', 'zhd-elementor-blocks');
-define('ZHD_EB_OPTION_TOKENS', 'zhd_eb_design_tokens');
 define('ZHD_EB_OPTION_SETTINGS', 'zhd_eb_plugin_settings');
 define('ZHD_EB_OPTION_AI_PRESETS', 'zhd_eb_ai_presets');
 define('ZHD_EB_OPTION_SCHEMA_VERSION', 'zhd_eb_schema_version');

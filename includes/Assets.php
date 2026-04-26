@@ -11,10 +11,6 @@ namespace ZHD\ElementorBlocks;
 
 final class Assets
 {
-    public function __construct(private readonly Settings $settings)
-    {
-    }
-
     public function register_hooks(): void
     {
         add_action('wp_enqueue_scripts', array($this, 'register_frontend_assets'));
@@ -30,8 +26,6 @@ final class Assets
             array(),
             ZHD_EB_VERSION
         );
-
-        wp_add_inline_style('zhd-eb-frontend-base', $this->settings->get_tokens_css());
 
         wp_register_style(
             'zhd-eb-widget-hero-cro',

@@ -1,29 +1,23 @@
-:root {
-  --zhd-eb-color-primary: #0f172a;
-  --zhd-eb-color-secondary: #1d4ed8;
-  --zhd-eb-color-surface: #ffffff;
-  --zhd-eb-color-text: #0f172a;
-  --zhd-eb-color-text-muted: #475569;
-  --zhd-eb-color-accent: #f97316;
-  --zhd-eb-font-heading: "Manrope", sans-serif;
-  --zhd-eb-font-body: "Inter", sans-serif;
-  --zhd-eb-space-sm: 12px;
-  --zhd-eb-space-md: 20px;
-  --zhd-eb-space-lg: 36px;
+.zhd-eb-widget {
+  --zhd-eb-color-primary: var(--e-global-color-primary, currentColor);
+  --zhd-eb-color-secondary: var(--e-global-color-secondary, var(--e-global-color-primary, currentColor));
+  --zhd-eb-color-surface: var(--e-global-color-accent, #ffffff);
+  --zhd-eb-color-text: var(--e-global-color-text, currentColor);
+  --zhd-eb-color-text-muted: color-mix(in srgb, var(--zhd-eb-color-text) 68%, transparent);
+  --zhd-eb-color-accent: var(--e-global-color-primary, currentColor);
+  --zhd-eb-font-heading: var(--e-global-typography-primary-font-family, inherit);
+  --zhd-eb-font-body: var(--e-global-typography-text-font-family, inherit);
   --zhd-eb-radius-md: 16px;
   --zhd-eb-radius-lg: 28px;
-  --zhd-eb-shadow-soft: 0 20px 60px rgba(15, 23, 42, 0.1);
+  --zhd-eb-shadow-soft: 0 20px 60px rgba(15, 23, 42, 0.08);
   --zhd-eb-button-radius: 999px;
   --zhd-eb-button-padding-y: 14px;
   --zhd-eb-button-padding-x: 24px;
   --zhd-eb-badge-radius: 999px;
-  --zhd-eb-badge-bg: #eff6ff;
-  --zhd-eb-badge-text: #1d4ed8;
-}
-
-.zhd-eb-widget {
-  color: var(--zhd-eb-color-text);
-  font-family: var(--zhd-eb-font-body);
+  --zhd-eb-badge-bg: color-mix(in srgb, var(--zhd-eb-color-secondary) 10%, #ffffff);
+  --zhd-eb-badge-text: var(--zhd-eb-color-secondary);
+  color: inherit;
+  font-family: inherit;
 }
 
 .zhd-eb-widget * {
@@ -54,11 +48,10 @@
   padding: 20px;
   border: 1px dashed rgba(15, 23, 42, 0.18);
   border-radius: var(--zhd-eb-radius-md);
-  background: #f8fafc;
+  background: color-mix(in srgb, var(--zhd-eb-color-surface) 92%, #f8fafc);
 }
 
 .zhd-eb-editor-placeholder p {
   margin-bottom: 0;
   color: var(--zhd-eb-color-text-muted);
 }
-
