@@ -1,0 +1,39 @@
+.zhd-eb-badges__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.zhd-eb-badges__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: var(--zhd-eb-radius-md);
+  background: var(--zhd-eb-color-surface);
+  box-shadow: var(--zhd-eb-shadow-soft);
+}
+
+.zhd-eb-badges__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--zhd-eb-badge-bg);
+  color: var(--zhd-eb-badge-text);
+}
+
+.zhd-eb-badges__label {
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+@media (max-width: 767px) {
+  .zhd-eb-badges__grid {
+    grid-template-columns: 1fr;
+  }
+}
+

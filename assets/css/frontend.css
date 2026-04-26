@@ -1,0 +1,64 @@
+:root {
+  --zhd-eb-color-primary: #0f172a;
+  --zhd-eb-color-secondary: #1d4ed8;
+  --zhd-eb-color-surface: #ffffff;
+  --zhd-eb-color-text: #0f172a;
+  --zhd-eb-color-text-muted: #475569;
+  --zhd-eb-color-accent: #f97316;
+  --zhd-eb-font-heading: "Manrope", sans-serif;
+  --zhd-eb-font-body: "Inter", sans-serif;
+  --zhd-eb-space-sm: 12px;
+  --zhd-eb-space-md: 20px;
+  --zhd-eb-space-lg: 36px;
+  --zhd-eb-radius-md: 16px;
+  --zhd-eb-radius-lg: 28px;
+  --zhd-eb-shadow-soft: 0 20px 60px rgba(15, 23, 42, 0.1);
+  --zhd-eb-button-radius: 999px;
+  --zhd-eb-button-padding-y: 14px;
+  --zhd-eb-button-padding-x: 24px;
+  --zhd-eb-badge-radius: 999px;
+  --zhd-eb-badge-bg: #eff6ff;
+  --zhd-eb-badge-text: #1d4ed8;
+}
+
+.zhd-eb-widget {
+  color: var(--zhd-eb-color-text);
+  font-family: var(--zhd-eb-font-body);
+}
+
+.zhd-eb-widget * {
+  box-sizing: border-box;
+}
+
+.zhd-eb-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--zhd-eb-button-padding-y) var(--zhd-eb-button-padding-x);
+  border-radius: var(--zhd-eb-button-radius);
+  background: linear-gradient(135deg, var(--zhd-eb-color-secondary), var(--zhd-eb-color-accent));
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: var(--zhd-eb-shadow-soft);
+}
+
+.zhd-eb-button:hover,
+.zhd-eb-button:focus {
+  transform: translateY(-1px);
+  color: #fff;
+}
+
+.zhd-eb-editor-placeholder {
+  padding: 20px;
+  border: 1px dashed rgba(15, 23, 42, 0.18);
+  border-radius: var(--zhd-eb-radius-md);
+  background: #f8fafc;
+}
+
+.zhd-eb-editor-placeholder p {
+  margin-bottom: 0;
+  color: var(--zhd-eb-color-text-muted);
+}
+

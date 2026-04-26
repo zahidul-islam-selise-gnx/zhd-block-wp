@@ -1,0 +1,42 @@
+{
+  "version": "0.4",
+  "title": "ZHD Product Single Biotech",
+  "type": "section",
+  "content": [
+    {
+      "id": "zhd-product-section",
+      "elType": "section",
+      "settings": {
+        "structure": "10"
+      },
+      "elements": [
+        {
+          "id": "zhd-product-column",
+          "elType": "column",
+          "settings": {
+            "_column_size": 100
+          },
+          "elements": [
+            {
+              "id": "zhd-product-buy-box-widget",
+              "elType": "widget",
+              "widgetType": "zhd_product_buy_box",
+              "settings": {
+                "guarantee_text": "30-day satisfaction guarantee",
+                "stock_label": "Availability",
+                "show_description": "yes",
+                "product_source": "context",
+                "trust_badges": "Third-party tested\nFast shipping\nDoctor-formulated"
+              },
+              "elements": []
+            }
+          ],
+          "isInner": false
+        }
+      ],
+      "isInner": false
+    }
+  ],
+  "page_settings": []
+}
+
