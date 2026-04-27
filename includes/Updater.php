@@ -157,7 +157,7 @@ final class Updater
             'requires'      => ZHD_EB_MINIMUM_WP_VERSION,
             'requires_php'  => ZHD_EB_MINIMUM_PHP_VERSION,
             'sections'      => array(
-                'description' => __('CRO-focused Elementor widgets with bundled templates, Elementor-compatible defaults, AI tooling, and GitHub-based updates.', ZHD_EB_TEXT_DOMAIN),
+                'description' => __('AI copilot for Elementor with screenshot-aware draft generation, a native Elementor compiler, and GitHub-based updates.', ZHD_EB_TEXT_DOMAIN),
                 'changelog'   => wp_kses_post(wpautop($release['body'])),
             ),
         );

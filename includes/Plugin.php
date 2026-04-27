@@ -25,9 +25,10 @@ final class Plugin
         $ai           = new AI($settings);
         $assets       = new Assets();
         $templates    = new Templates($dependencies);
+        $compiler     = new ElementorCompiler($dependencies, $templates, $ai);
         $widgets      = new WidgetsLoader($dependencies);
         $updater      = new Updater($settings);
-        $admin        = new Admin($dependencies, $widgets, $templates, $settings, $updater, $ai);
+        $admin        = new Admin($dependencies, $widgets, $settings, $updater, $ai, $compiler);
 
         $this->services = array(
             'dependencies' => $dependencies,
@@ -35,6 +36,7 @@ final class Plugin
             'ai'           => $ai,
             'assets'       => $assets,
             'templates'    => $templates,
+            'compiler'     => $compiler,
             'widgets'      => $widgets,
             'updater'      => $updater,
             'admin'        => $admin,

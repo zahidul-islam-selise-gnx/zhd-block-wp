@@ -28,22 +28,8 @@ final class Assets
         );
 
         wp_register_style(
-            'zhd-eb-widget-hero-cro',
-            ZHD_EB_PLUGIN_URL . 'assets/css/widget-hero-cro.css',
-            array('zhd-eb-frontend-base'),
-            ZHD_EB_VERSION
-        );
-
-        wp_register_style(
-            'zhd-eb-widget-product-buy-box',
-            ZHD_EB_PLUGIN_URL . 'assets/css/widget-product-buy-box.css',
-            array('zhd-eb-frontend-base'),
-            ZHD_EB_VERSION
-        );
-
-        wp_register_style(
-            'zhd-eb-widget-trust-badges',
-            ZHD_EB_PLUGIN_URL . 'assets/css/widget-trust-badges.css',
+            'zhd-eb-widget-ai-copilot',
+            ZHD_EB_PLUGIN_URL . 'assets/css/widget-ai-copilot.css',
             array('zhd-eb-frontend-base'),
             ZHD_EB_VERSION
         );

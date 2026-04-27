@@ -2,8 +2,8 @@
 /**
  * Plugin Name: ZHD Elementor Blocks
  * Plugin URI:  https://github.com/zahidul-islam-selise-gnx/zhd-block-wp
- * Description: CRO-focused Elementor widgets, bundled templates, AI-powered presets, and GitHub-powered updates for client delivery.
- * Version:     1.0.1
+ * Description: AI copilot for Elementor that turns briefs and screenshots into saved design drafts and Elementor-library-ready layouts.
+ * Version:     1.0.2
  * Author:      Z. Islam
  * Author URI:  https://zahidui.com
  * Text Domain: zhd-elementor-blocks
@@ -21,7 +21,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('ZHD_EB_VERSION', '1.0.1');
+define('ZHD_EB_VERSION', '1.0.2');
 define('ZHD_EB_SCHEMA_VERSION', '1');
 define('ZHD_EB_PLUGIN_SLUG', 'zhd-elementor-blocks');
 define('ZHD_EB_PLUGIN_FILE', __FILE__);

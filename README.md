@@ -1,22 +1,17 @@
 # ZHD Elementor Blocks
 
-ZHD Elementor Blocks is a custom WordPress plugin that extends Elementor with reusable CRO-focused widgets, bundled template starters, AI-assisted presets, and GitHub-based update support.
+ZHD Elementor Blocks is now an AI copilot for Elementor. It turns briefs and screenshot references into saved design drafts, then compiles approved drafts into native Elementor library templates.
 
 ## Current scope
 
 - OOP plugin bootstrap with internal autoloading
-- Shared widget foundation for Elementor widgets
-- Initial widgets:
-  - `Hero CRO`
-  - `Product Buy Box`
-  - `Trust Badges`
-- Custom Elementor category: `ZHD CRO Blocks`
-- Elementor/theme-native styling defaults
-- Bundled local Elementor JSON templates
-- Admin area for overview, templates, settings, updates, and tools
+- Single Elementor workspace widget: `ZHD AI Copilot`
+- Custom Elementor category: `ZHD AI Copilot`
+- Admin area for overview, AI Studio, settings, updates, and tools
 - Public GitHub Releases updater
-- Safe AI schema layer for future OpenAI-assisted layout generation and preset storage
-- Direct OpenAI Responses API generation from a brief, with structured-output validation before saving
+- Screenshot-aware OpenAI Responses API generation
+- Structured AI draft storage inside the plugin
+- Elementor compiler that saves approved drafts into the Elementor library
 
 ## Plugin structure
 
@@ -25,7 +20,6 @@ zhd-block-wp/
 ├── zhd-elementor-blocks.php
 ├── includes/
 ├── widgets/
-├── templates/
 ├── assets/
 ├── docs/
 └── languages/
@@ -36,23 +30,21 @@ zhd-block-wp/
 - WordPress `6.5+`
 - PHP `8.1+`
 - Elementor `3.20+`
-- WooCommerce `8+` for Woo-aware widgets like `Product Buy Box`
 
 ## Installation
 
 1. Copy this repository into `wp-content/plugins/`.
 2. Activate `ZHD Elementor Blocks` from WordPress admin.
 3. Ensure Elementor is active.
-4. If you want WooCommerce widgets, activate WooCommerce too.
+4. Configure OpenAI in `ZHD Blocks -> Settings` if you want direct AI generation.
 
 ## Admin pages
 
 Open `ZHD Blocks` in WordPress admin to access:
 
 - `Overview`: dependency status, installed widgets, version details
-- `Templates`: import bundled Elementor JSON templates
 - `Settings`: manage operational plugin settings like AI and updater preferences
-- `AI Studio`: inspect the safe schema, validate structured payloads, and save AI-safe presets
+- `AI Studio`: generate drafts from briefs and screenshots, validate structured payloads, and save drafts to the plugin or the Elementor library
 - `Updates`: inspect GitHub release metadata used for updates
 - `Tools`: clear caches and export a debug snapshot
 
@@ -86,7 +78,7 @@ This repo now supports WordPress-native updates from GitHub Releases.
 
 ## Next recommended steps
 
-- Add the second widget wave: testimonial, FAQ, CTA banner, COA section, benefits, bundle offer
-- Test the bundled JSON templates against a live Elementor site
+- Test screenshot-driven draft generation on a live Elementor site
+- Add direct in-editor insertion from the AI Copilot workspace widget if you want a tighter Elementor workflow
 - Push the first tagged release and verify the workflow-created GitHub Release
 - Add automated PHPUnit/WordPress integration tests once a local WP test harness is in place

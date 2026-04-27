@@ -16,20 +16,20 @@ final class Admin
     public function __construct(
         private readonly Dependencies $dependencies,
         private readonly WidgetsLoader $widgets,
-        private readonly Templates $templates,
         private readonly Settings $settings,
         private readonly Updater $updater,
-        private readonly AI $ai
+        private readonly AI $ai,
+        private readonly ElementorCompiler $compiler
     ) {
     }
 
     public function register_hooks(): void
     {
         add_action('admin_menu', array($this, 'register_menu'));
-        add_action('admin_post_zhd_eb_import_template', array($this, 'handle_template_import'));
         add_action('admin_post_zhd_eb_clear_caches', array($this, 'handle_clear_caches'));
         add_action('admin_post_zhd_eb_save_ai_preset', array($this, 'handle_save_ai_preset'));
         add_action('admin_post_zhd_eb_generate_ai_preset', array($this, 'handle_generate_ai_preset'));
+        add_action('admin_post_zhd_eb_compile_ai_preset', array($this, 'handle_compile_ai_preset'));
     }
 
     public function register_menu(): void
@@ -53,7 +53,6 @@ final class Admin
         $tab = sanitize_key((string) ($_GET['tab'] ?? 'overview'));
         $tabs = array(
             'overview'  => __('Overview', ZHD_EB_TEXT_DOMAIN),
-            'templates' => __('Templates', ZHD_EB_TEXT_DOMAIN),
             'settings'  => __('Settings', ZHD_EB_TEXT_DOMAIN),
             'ai'        => __('AI Studio', ZHD_EB_TEXT_DOMAIN),
             'updates'   => __('Updates', ZHD_EB_TEXT_DOMAIN),
@@ -92,9 +91,6 @@ final class Admin
         echo '<div class="zhd-eb-card">';
 
         switch ($tab) {
-            case 'templates':
-                $this->render_templates_tab();
-                break;
             case 'settings':
                 $this->render_settings_tab();
                 break;
@@ -115,39 +111,6 @@ final class Admin
 
         echo '</div>';
         echo '</div>';
-    }
-
-    public function handle_template_import(): void
-    {
-        if (! current_user_can('manage_options')) {
-            wp_die(esc_html__('You do not have permission to import templates.', ZHD_EB_TEXT_DOMAIN));
-        }
-
-        check_admin_referer('zhd_eb_import_template');
-
-        $slug = sanitize_key((string) ($_POST['template_slug'] ?? ''));
-        $result = $this->templates->import_template($slug);
-
-        $args = array(
-            'page' => 'zhd-elementor-blocks',
-            'tab'  => 'templates',
-        );
-
-        if (is_wp_error($result)) {
-            $args['zhd_notice'] = 'error';
-            $args['zhd_message'] = $result->get_error_message();
-        } else {
-            $template = $this->templates->get_template($slug);
-            $args['zhd_notice'] = 'success';
-            $args['zhd_message'] = sprintf(
-                /* translators: %s: template label */
-                __('Template imported: %s', ZHD_EB_TEXT_DOMAIN),
-                (string) ($template['label'] ?? $slug)
-            );
-        }
-
-        wp_safe_redirect(add_query_arg($args, admin_url('admin.php')));
-        exit;
     }
 
     public function handle_clear_caches(): void
@@ -209,8 +172,8 @@ final class Admin
         } else {
             $args['zhd_notice'] = 'success';
             $args['zhd_message'] = sprintf(
-                /* translators: %s: preset title */
-                __('AI-safe preset saved: %s', ZHD_EB_TEXT_DOMAIN),
+                /* translators: %s: draft title */
+                __('AI draft saved: %s', ZHD_EB_TEXT_DOMAIN),
                 (string) $result['title']
             );
         }
@@ -232,7 +195,10 @@ final class Admin
                 'brief'            => wp_unslash((string) ($_POST['brief'] ?? '')),
                 'business_context' => wp_unslash((string) ($_POST['business_context'] ?? '')),
                 'cta_goal'         => wp_unslash((string) ($_POST['cta_goal'] ?? '')),
-            )
+                'visual_direction' => wp_unslash((string) ($_POST['visual_direction'] ?? '')),
+                'generation_model' => wp_unslash((string) ($_POST['generation_model'] ?? '')),
+            ),
+            $_FILES
         );
 
         $args = array(
@@ -246,9 +212,41 @@ final class Admin
         } else {
             $args['zhd_notice'] = 'success';
             $args['zhd_message'] = sprintf(
-                /* translators: %s: preset title */
-                __('AI preset generated and saved: %s', ZHD_EB_TEXT_DOMAIN),
+                /* translators: %s: draft title */
+                __('AI draft generated and saved: %s', ZHD_EB_TEXT_DOMAIN),
                 (string) $result['title']
+            );
+        }
+
+        wp_safe_redirect(add_query_arg($args, admin_url('admin.php')));
+        exit;
+    }
+
+    public function handle_compile_ai_preset(): void
+    {
+        if (! current_user_can('manage_options')) {
+            wp_die(esc_html__('You do not have permission to compile AI presets.', ZHD_EB_TEXT_DOMAIN));
+        }
+
+        check_admin_referer('zhd_eb_compile_ai_preset');
+
+        $preset_slug = sanitize_title((string) ($_POST['preset_slug'] ?? ''));
+        $result = $this->compiler->compile_preset_to_template($preset_slug);
+
+        $args = array(
+            'page' => 'zhd-elementor-blocks',
+            'tab'  => 'ai',
+        );
+
+        if (is_wp_error($result)) {
+            $args['zhd_notice'] = 'error';
+            $args['zhd_message'] = $result->get_error_message();
+        } else {
+            $args['zhd_notice'] = 'success';
+            $args['zhd_message'] = sprintf(
+                /* translators: %s: preset title */
+                __('AI draft saved to the Elementor library: %s', ZHD_EB_TEXT_DOMAIN),
+                (string) ($result['preset']['title'] ?? $preset_slug)
             );
         }
 
@@ -279,7 +277,7 @@ final class Admin
     private function render_overview_tab(): void
     {
         echo '<h2>' . esc_html__('Platform Overview', ZHD_EB_TEXT_DOMAIN) . '</h2>';
-        echo '<p>' . esc_html__('This plugin ships CRO-focused Elementor blocks, bundled templates, Elementor-compatible AI tooling, and a GitHub release updater for agency delivery.', ZHD_EB_TEXT_DOMAIN) . '</p>';
+        echo '<p>' . esc_html__('This plugin is now an AI copilot for Elementor: generate visual directions from briefs and screenshots, keep drafts inside the plugin, and move approved results into the Elementor library.', ZHD_EB_TEXT_DOMAIN) . '</p>';
 
         echo '<div class="zhd-eb-grid">';
         echo '<div>';
@@ -315,74 +313,11 @@ final class Admin
         echo '</tbody></table>';
     }
 
-    private function render_templates_tab(): void
-    {
-        $templates = $this->templates->get_manifest();
-
-        echo '<h2>' . esc_html__('Bundled Template Library', ZHD_EB_TEXT_DOMAIN) . '</h2>';
-        echo '<p>' . esc_html__('Import starter Elementor JSON templates from the local plugin bundle. This v1 flow is local-only and designed to be cloud-sync friendly later.', ZHD_EB_TEXT_DOMAIN) . '</p>';
-        echo '<div class="zhd-eb-template-grid">';
-
-        foreach ($templates as $slug => $template) {
-            $preview_image = (string) ($template['preview_image'] ?? '');
-            $required_widgets = array_map('strval', (array) ($template['required_widgets'] ?? array()));
-
-            echo '<article class="zhd-eb-template-card">';
-            echo '<div class="zhd-eb-template-card__preview">';
-
-            if ('' !== $preview_image) {
-                echo '<img src="' . esc_url($preview_image) . '" alt="' . esc_attr((string) $template['label']) . '" class="zhd-eb-template-card__image">';
-            } else {
-                echo '<div class="zhd-eb-template-card__placeholder">';
-                echo '<div class="zhd-eb-template-card__chrome">';
-                echo '<span></span><span></span><span></span>';
-                echo '</div>';
-                echo '<div class="zhd-eb-template-card__layout zhd-eb-template-card__layout--' . esc_attr($slug) . '">';
-                echo '<div class="zhd-eb-template-card__block zhd-eb-template-card__block--hero"></div>';
-                echo '<div class="zhd-eb-template-card__row">';
-                echo '<div class="zhd-eb-template-card__block zhd-eb-template-card__block--sm"></div>';
-                echo '<div class="zhd-eb-template-card__block zhd-eb-template-card__block--sm"></div>';
-                echo '</div>';
-                echo '<div class="zhd-eb-template-card__row">';
-                echo '<div class="zhd-eb-template-card__block zhd-eb-template-card__block--md"></div>';
-                echo '<div class="zhd-eb-template-card__block zhd-eb-template-card__block--md"></div>';
-                echo '<div class="zhd-eb-template-card__block zhd-eb-template-card__block--md"></div>';
-                echo '</div>';
-                echo '</div>';
-                echo '<div class="zhd-eb-template-card__label">' . esc_html((string) $template['label']) . '</div>';
-                echo '</div>';
-            }
-
-            echo '</div>';
-            echo '<div class="zhd-eb-template-card__body">';
-            echo '<div class="zhd-eb-template-card__header">';
-            echo '<h3>' . esc_html((string) $template['label']) . '</h3>';
-            echo '<code>' . esc_html($slug) . '</code>';
-            echo '</div>';
-            echo '<p>' . esc_html((string) $template['description']) . '</p>';
-            echo '<div class="zhd-eb-template-card__chips">';
-            foreach ($required_widgets as $widget_slug) {
-                echo '<span class="zhd-eb-template-card__chip">' . esc_html($widget_slug) . '</span>';
-            }
-            echo '</div>';
-            echo '<div class="zhd-eb-template-card__footer">';
-            echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
-            wp_nonce_field('zhd_eb_import_template');
-            echo '<input type="hidden" name="action" value="zhd_eb_import_template">';
-            echo '<input type="hidden" name="template_slug" value="' . esc_attr($slug) . '">';
-            submit_button(__('Import into Elementor', ZHD_EB_TEXT_DOMAIN), 'secondary zhd-eb-template-card__button', 'submit', false);
-            echo '</form>';
-            echo '</div>';
-            echo '</div>';
-            echo '</article>';
-        }
-
-        echo '</div>';
-    }
-
     private function render_settings_tab(): void
     {
         $plugin_settings = $this->settings->get_plugin_settings();
+        $model_options = $this->ai->get_available_models();
+        $selected_model = (string) $plugin_settings['openai_model'];
 
         echo '<h2>' . esc_html__('Plugin Settings', ZHD_EB_TEXT_DOMAIN) . '</h2>';
         echo '<p>' . esc_html__('Visual defaults are now inherited from Elementor global styles and the active theme. Use Elementor itself as the design system. The settings below are for plugin behavior only.', ZHD_EB_TEXT_DOMAIN) . '</p>';
@@ -391,9 +326,18 @@ final class Admin
         echo '<table class="form-table"><tbody>';
         echo '<tr><th scope="row">' . esc_html__('OpenAI proxy URL', ZHD_EB_TEXT_DOMAIN) . '</th><td><input type="url" class="regular-text" name="' . esc_attr(ZHD_EB_OPTION_SETTINGS . '[openai_proxy_url]') . '" value="' . esc_attr((string) $plugin_settings['openai_proxy_url']) . '"><p class="description">' . esc_html__('Optional endpoint for AI-generated layout requests if you want to route calls through your own service.', ZHD_EB_TEXT_DOMAIN) . '</p></td></tr>';
         echo '<tr><th scope="row">' . esc_html__('OpenAI API key', ZHD_EB_TEXT_DOMAIN) . '</th><td><input type="password" class="regular-text" name="' . esc_attr(ZHD_EB_OPTION_SETTINGS . '[openai_api_key]') . '" value=""><p class="description">' . esc_html($this->settings->has_managed_openai_api_key() ? __('A managed API key is already saved. Leave this blank to keep the current value, or paste a new key to replace it. You can also define ZHD_EB_OPENAI_API_KEY in wp-config.php or set OPENAI_API_KEY in the environment.', ZHD_EB_TEXT_DOMAIN) : __('Optional if you are using the direct OpenAI API. You can also define ZHD_EB_OPENAI_API_KEY in wp-config.php or set OPENAI_API_KEY in the environment.', ZHD_EB_TEXT_DOMAIN)) . '</p></td></tr>';
-        echo '<tr><th scope="row">' . esc_html__('Preferred model', ZHD_EB_TEXT_DOMAIN) . '</th><td><input type="text" class="regular-text" name="' . esc_attr(ZHD_EB_OPTION_SETTINGS . '[openai_model]') . '" value="' . esc_attr((string) $plugin_settings['openai_model']) . '"></td></tr>';
+        echo '<tr><th scope="row">' . esc_html__('Preferred model', ZHD_EB_TEXT_DOMAIN) . '</th><td><select name="' . esc_attr(ZHD_EB_OPTION_SETTINGS . '[openai_model]') . '" class="regular-text">';
+        foreach ($model_options as $model_id => $model_label) {
+            printf(
+                '<option value="%1$s" %2$s>%3$s</option>',
+                esc_attr($model_id),
+                selected($selected_model, $model_id, false),
+                esc_html($model_label)
+            );
+        }
+        echo '</select><p class="description">' . esc_html__('This is the default model for AI Studio. GPT-5.5 is the latest flagship model currently listed in OpenAI’s official docs.', ZHD_EB_TEXT_DOMAIN) . '</p></td></tr>';
         echo '<tr><th scope="row">' . esc_html__('Include prereleases', ZHD_EB_TEXT_DOMAIN) . '</th><td><label><input type="checkbox" name="' . esc_attr(ZHD_EB_OPTION_SETTINGS . '[allow_prereleases]') . '" value="1" ' . checked(! empty($plugin_settings['allow_prereleases']), true, false) . '> ' . esc_html__('Allow prerelease GitHub versions in update checks', ZHD_EB_TEXT_DOMAIN) . '</label></td></tr>';
-        echo '<tr><th scope="row">' . esc_html__('Template debug logging', ZHD_EB_TEXT_DOMAIN) . '</th><td><label><input type="checkbox" name="' . esc_attr(ZHD_EB_OPTION_SETTINGS . '[template_debug_log]') . '" value="1" ' . checked(! empty($plugin_settings['template_debug_log']), true, false) . '> ' . esc_html__('Keep room for future import/generation diagnostics', ZHD_EB_TEXT_DOMAIN) . '</label></td></tr>';
+        echo '<tr><th scope="row">' . esc_html__('AI debug logging', ZHD_EB_TEXT_DOMAIN) . '</th><td><label><input type="checkbox" name="' . esc_attr(ZHD_EB_OPTION_SETTINGS . '[template_debug_log]') . '" value="1" ' . checked(! empty($plugin_settings['template_debug_log']), true, false) . '> ' . esc_html__('Keep room for future generation and compiler diagnostics', ZHD_EB_TEXT_DOMAIN) . '</label></td></tr>';
         echo '</tbody></table>';
         submit_button(__('Save plugin settings', ZHD_EB_TEXT_DOMAIN), 'secondary');
         echo '</form>';
@@ -426,13 +370,15 @@ final class Admin
     {
         $presets = $this->ai->get_presets();
         $status_label = $this->ai->get_generation_configuration_label();
+        $model_options = $this->ai->get_available_models();
+        $preferred_model = $this->ai->get_preferred_model();
 
         echo '<section class="zhd-eb-ai-studio">';
         echo '<div class="zhd-eb-ai-hero">';
         echo '<div class="zhd-eb-ai-hero__content">';
         echo '<span class="zhd-eb-ai-kicker">' . esc_html__('ZHD AI Studio', ZHD_EB_TEXT_DOMAIN) . '</span>';
         echo '<h2>' . esc_html__('Future-ready layout generation, safely constrained.', ZHD_EB_TEXT_DOMAIN) . '</h2>';
-        echo '<p>' . esc_html__('Generate CRO-focused design presets from a plain-language brief, while keeping output locked to your supported ZHD widget system instead of raw Elementor internals.', ZHD_EB_TEXT_DOMAIN) . '</p>';
+        echo '<p>' . esc_html__('Generate AI design drafts from a plain-language brief, uploaded section screenshots, or both, while keeping output aligned to a compiler-safe Elementor layout schema instead of raw Elementor internals.', ZHD_EB_TEXT_DOMAIN) . '</p>';
         echo '<div class="zhd-eb-ai-meta">';
         echo '<span class="zhd-eb-ai-chip">' . esc_html__('White-mode studio UI', ZHD_EB_TEXT_DOMAIN) . '</span>';
         echo '<span class="zhd-eb-ai-chip">' . esc_html__('Structured outputs', ZHD_EB_TEXT_DOMAIN) . '</span>';
@@ -445,13 +391,18 @@ final class Admin
         echo '<div class="zhd-eb-ai-layout">';
         echo '<div class="zhd-eb-ai-main">';
         echo '<section class="zhd-eb-ai-panel zhd-eb-ai-panel--form">';
-        echo '<div class="zhd-eb-ai-panel__head"><h3>' . esc_html__('Generate From A Brief', ZHD_EB_TEXT_DOMAIN) . '</h3><p>' . esc_html__('Use your actual campaign or client context and let the plugin request a safe, validated preset from OpenAI.', ZHD_EB_TEXT_DOMAIN) . '</p></div>';
-        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="zhd-eb-ai-form">';
+        echo '<div class="zhd-eb-ai-panel__head"><h3>' . esc_html__('Generate Drafts From Brief + Screenshots', ZHD_EB_TEXT_DOMAIN) . '</h3><p>' . esc_html__('Use campaign context, upload one or more section screenshots, and let the copilot create structured Elementor-ready design drafts that stay saved inside the plugin until you approve them.', ZHD_EB_TEXT_DOMAIN) . '</p></div>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="zhd-eb-ai-form" enctype="multipart/form-data">';
         wp_nonce_field('zhd_eb_generate_ai_preset');
         echo '<input type="hidden" name="action" value="zhd_eb_generate_ai_preset">';
         echo '<div class="zhd-eb-ai-field">';
         echo '<label for="zhd-eb-ai-brief">' . esc_html__('Design brief', ZHD_EB_TEXT_DOMAIN) . '</label>';
-        echo '<textarea id="zhd-eb-ai-brief" class="large-text" name="brief" rows="7" placeholder="' . esc_attr__('Example: Create a high-converting hero plus trust stack for a biotech supplement landing page focused on cognitive clarity and clean science.', ZHD_EB_TEXT_DOMAIN) . '"></textarea>';
+        echo '<textarea id="zhd-eb-ai-brief" class="large-text" name="brief" rows="7" placeholder="' . esc_attr__('Example: Use the uploaded references to create a cleaner, more premium supplement landing flow with stronger hierarchy and a more obvious CTA.', ZHD_EB_TEXT_DOMAIN) . '"></textarea>';
+        echo '</div>';
+        echo '<div class="zhd-eb-ai-field">';
+        echo '<label for="zhd-eb-ai-screenshots">' . esc_html__('Reference screenshots', ZHD_EB_TEXT_DOMAIN) . '</label>';
+        echo '<input id="zhd-eb-ai-screenshots" type="file" name="reference_screenshots[]" accept="image/png,image/jpeg,image/webp" multiple>';
+        echo '<p>' . esc_html($this->ai->get_reference_limits_description()) . '</p>';
         echo '</div>';
         echo '<div class="zhd-eb-ai-form__grid">';
         echo '<div class="zhd-eb-ai-field">';
@@ -464,29 +415,47 @@ final class Admin
         echo '<p>' . esc_html__('The generated preset is saved only after it matches the safe ZHD schema.', ZHD_EB_TEXT_DOMAIN) . '</p>';
         echo '</div>';
         echo '</div>';
-        submit_button(__('Generate and save preset', ZHD_EB_TEXT_DOMAIN), 'primary zhd-eb-button-primary');
+        echo '<div class="zhd-eb-ai-field">';
+        echo '<label for="zhd-eb-ai-model">' . esc_html__('Model for this generation', ZHD_EB_TEXT_DOMAIN) . '</label>';
+        echo '<select id="zhd-eb-ai-model" name="generation_model" class="regular-text zhd-eb-ai-select">';
+        foreach ($model_options as $model_id => $model_label) {
+            printf(
+                '<option value="%1$s" %2$s>%3$s</option>',
+                esc_attr($model_id),
+                selected($preferred_model, $model_id, false),
+                esc_html($model_label)
+            );
+        }
+        echo '</select>';
+        echo '<p>' . esc_html__('This only affects the current draft generation. Your saved preferred model remains the default for future runs.', ZHD_EB_TEXT_DOMAIN) . '</p>';
+        echo '</div>';
+        echo '<div class="zhd-eb-ai-field">';
+        echo '<label for="zhd-eb-ai-visual-direction">' . esc_html__('Visual direction', ZHD_EB_TEXT_DOMAIN) . '</label>';
+        echo '<textarea id="zhd-eb-ai-visual-direction" class="large-text" name="visual_direction" rows="4" placeholder="' . esc_attr__('Optional: describe what to preserve or change from the screenshots, like spacing, hierarchy, trust treatment, or CTA emphasis.', ZHD_EB_TEXT_DOMAIN) . '"></textarea>';
+        echo '</div>';
+        submit_button(__('Generate and save draft', ZHD_EB_TEXT_DOMAIN), 'primary zhd-eb-button-primary');
         echo '</form>';
         echo '</section>';
 
         echo '<div class="zhd-eb-ai-code-grid">';
         echo '<section class="zhd-eb-ai-panel">';
-        echo '<div class="zhd-eb-ai-panel__head"><h3>' . esc_html__('Schema Contract', ZHD_EB_TEXT_DOMAIN) . '</h3><p>' . esc_html__('This is the exact structured shape the model is allowed to return.', ZHD_EB_TEXT_DOMAIN) . '</p></div>';
+        echo '<div class="zhd-eb-ai-panel__head"><h3>' . esc_html__('Compiler Schema', ZHD_EB_TEXT_DOMAIN) . '</h3><p>' . esc_html__('This is the exact structured shape the model is allowed to return before the compiler turns it into a native Elementor template.', ZHD_EB_TEXT_DOMAIN) . '</p></div>';
         echo '<textarea class="large-text code" rows="18" readonly>' . esc_textarea($this->ai->get_schema_json()) . '</textarea>';
         echo '</section>';
 
         echo '<section class="zhd-eb-ai-panel">';
-        echo '<div class="zhd-eb-ai-panel__head"><h3>' . esc_html__('Example Payload', ZHD_EB_TEXT_DOMAIN) . '</h3><p>' . esc_html__('Use this to understand the save format or to seed manual edits.', ZHD_EB_TEXT_DOMAIN) . '</p></div>';
+        echo '<div class="zhd-eb-ai-panel__head"><h3>' . esc_html__('Example Draft Payload', ZHD_EB_TEXT_DOMAIN) . '</h3><p>' . esc_html__('Use this to understand the saved draft format or to seed manual edits.', ZHD_EB_TEXT_DOMAIN) . '</p></div>';
         echo '<textarea class="large-text code" rows="18" readonly>' . esc_textarea($this->ai->get_example_payload_json()) . '</textarea>';
         echo '</section>';
         echo '</div>';
 
         echo '<section class="zhd-eb-ai-panel">';
-        echo '<div class="zhd-eb-ai-panel__head"><h3>' . esc_html__('Save A Structured Preset', ZHD_EB_TEXT_DOMAIN) . '</h3><p>' . esc_html__('Paste a structured payload manually if you want to validate and store it without generating a new one.', ZHD_EB_TEXT_DOMAIN) . '</p></div>';
+        echo '<div class="zhd-eb-ai-panel__head"><h3>' . esc_html__('Save A Structured Draft', ZHD_EB_TEXT_DOMAIN) . '</h3><p>' . esc_html__('Paste a structured payload manually if you want to validate and store a draft without generating a new one.', ZHD_EB_TEXT_DOMAIN) . '</p></div>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="zhd-eb-ai-form">';
         wp_nonce_field('zhd_eb_save_ai_preset');
         echo '<input type="hidden" name="action" value="zhd_eb_save_ai_preset">';
         echo '<textarea class="large-text code" name="ai_payload" rows="16">' . esc_textarea($this->ai->get_example_payload_json()) . '</textarea>';
-        submit_button(__('Validate and save preset', ZHD_EB_TEXT_DOMAIN), 'secondary zhd-eb-button-secondary');
+        submit_button(__('Validate and save draft', ZHD_EB_TEXT_DOMAIN), 'secondary zhd-eb-button-secondary');
         echo '</form>';
         echo '</section>';
         echo '</div>';
@@ -495,9 +464,11 @@ final class Admin
         echo '<section class="zhd-eb-ai-panel zhd-eb-ai-panel--sticky">';
         echo '<div class="zhd-eb-ai-panel__head"><h3>' . esc_html__('Studio Notes', ZHD_EB_TEXT_DOMAIN) . '</h3></div>';
         echo '<ul class="zhd-eb-ai-list">';
-        echo '<li>' . esc_html__('The model can only return supported ZHD widgets.', ZHD_EB_TEXT_DOMAIN) . '</li>';
+        echo '<li>' . esc_html__('The model can only return supported Elementor-friendly element types.', ZHD_EB_TEXT_DOMAIN) . '</li>';
+        echo '<li>' . esc_html__('Multiple screenshots are interpreted as a top-to-bottom section sequence.', ZHD_EB_TEXT_DOMAIN) . '</li>';
         echo '<li>' . esc_html__('Raw Elementor JSON is intentionally blocked.', ZHD_EB_TEXT_DOMAIN) . '</li>';
-        echo '<li>' . esc_html__('Presets are sanitized before storage.', ZHD_EB_TEXT_DOMAIN) . '</li>';
+        echo '<li>' . esc_html__('Drafts are sanitized before storage.', ZHD_EB_TEXT_DOMAIN) . '</li>';
+        echo '<li>' . esc_html__('Approved drafts can be saved to the Elementor library for insertion.', ZHD_EB_TEXT_DOMAIN) . '</li>';
         echo '<li>' . esc_html__('Use a proxy later if you want central cloud control.', ZHD_EB_TEXT_DOMAIN) . '</li>';
         echo '</ul>';
         echo '</section>';
@@ -505,25 +476,34 @@ final class Admin
         echo '</div>';
 
         echo '<section class="zhd-eb-ai-panel zhd-eb-ai-panel--table">';
-        echo '<div class="zhd-eb-ai-panel__head"><h3>' . esc_html__('Saved AI-safe presets', ZHD_EB_TEXT_DOMAIN) . '</h3><p>' . esc_html__('Generated and manually validated presets live here until you convert them into fuller page or template workflows.', ZHD_EB_TEXT_DOMAIN) . '</p></div>';
+        echo '<div class="zhd-eb-ai-panel__head"><h3>' . esc_html__('Saved AI Drafts', ZHD_EB_TEXT_DOMAIN) . '</h3><p>' . esc_html__('Generated and manually validated drafts stay inside the plugin until you decide to save one to the Elementor library.', ZHD_EB_TEXT_DOMAIN) . '</p></div>';
 
         if (array() === $presets) {
             echo '<div class="zhd-eb-ai-empty">';
             echo '<strong>' . esc_html__('No presets yet', ZHD_EB_TEXT_DOMAIN) . '</strong>';
-            echo '<p>' . esc_html__('Generate your first brief-driven preset and it will appear here.', ZHD_EB_TEXT_DOMAIN) . '</p>';
+            echo '<p>' . esc_html__('Generate your first AI draft and it will appear here.', ZHD_EB_TEXT_DOMAIN) . '</p>';
             echo '</div>';
             echo '</section>';
             echo '</section>';
             return;
         }
 
-        echo '<table class="widefat striped zhd-eb-ai-table"><thead><tr><th>' . esc_html__('Preset', ZHD_EB_TEXT_DOMAIN) . '</th><th>' . esc_html__('Source', ZHD_EB_TEXT_DOMAIN) . '</th><th>' . esc_html__('Blocks', ZHD_EB_TEXT_DOMAIN) . '</th><th>' . esc_html__('Created', ZHD_EB_TEXT_DOMAIN) . '</th></tr></thead><tbody>';
+        echo '<table class="widefat striped zhd-eb-ai-table"><thead><tr><th>' . esc_html__('Draft', ZHD_EB_TEXT_DOMAIN) . '</th><th>' . esc_html__('Source', ZHD_EB_TEXT_DOMAIN) . '</th><th>' . esc_html__('Sections', ZHD_EB_TEXT_DOMAIN) . '</th><th>' . esc_html__('State', ZHD_EB_TEXT_DOMAIN) . '</th><th>' . esc_html__('Created', ZHD_EB_TEXT_DOMAIN) . '</th><th>' . esc_html__('Action', ZHD_EB_TEXT_DOMAIN) . '</th></tr></thead><tbody>';
         foreach ($presets as $preset) {
             echo '<tr>';
             echo '<td><strong>' . esc_html((string) ($preset['title'] ?? '')) . '</strong><br><code>' . esc_html((string) ($preset['slug'] ?? '')) . '</code></td>';
             echo '<td>' . esc_html((string) ($preset['source'] ?? 'manual')) . '</td>';
-            echo '<td>' . esc_html((string) count((array) ($preset['blocks'] ?? array()))) . '</td>';
+            echo '<td>' . esc_html((string) count((array) ($preset['sections'] ?? array()))) . '</td>';
+            echo '<td>' . esc_html__('Draft', ZHD_EB_TEXT_DOMAIN) . '</td>';
             echo '<td>' . esc_html((string) ($preset['created_at'] ?? '')) . '</td>';
+            echo '<td>';
+            echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+            wp_nonce_field('zhd_eb_compile_ai_preset');
+            echo '<input type="hidden" name="action" value="zhd_eb_compile_ai_preset">';
+            echo '<input type="hidden" name="preset_slug" value="' . esc_attr((string) ($preset['slug'] ?? '')) . '">';
+            submit_button(__('Save to Elementor Library', ZHD_EB_TEXT_DOMAIN), 'secondary zhd-eb-button-secondary', 'submit', false);
+            echo '</form>';
+            echo '</td>';
             echo '</tr>';
         }
         echo '</tbody></table>';
@@ -550,7 +530,6 @@ final class Admin
                     'schema_version' => get_option(ZHD_EB_OPTION_SCHEMA_VERSION, ZHD_EB_SCHEMA_VERSION),
                     'dependencies'   => $this->dependencies->get_dependency_status(),
                     'widgets'        => $this->widgets->get_widget_manifest(),
-                    'templates'      => $this->templates->get_manifest(),
                     'ai_schema'      => $this->ai->get_schema(),
                     'ai_presets'     => $this->ai->get_presets(),
                 ),

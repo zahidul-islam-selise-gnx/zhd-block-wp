@@ -9,9 +9,7 @@ declare(strict_types=1);
 
 namespace ZHD\ElementorBlocks;
 
-use ZHD\ElementorBlocks\Widgets\HeroCRO;
-use ZHD\ElementorBlocks\Widgets\ProductBuyBox;
-use ZHD\ElementorBlocks\Widgets\TrustBadges;
+use ZHD\ElementorBlocks\Widgets\AICopilot;
 
 final class WidgetsLoader
 {
@@ -19,9 +17,7 @@ final class WidgetsLoader
      * @var array<int, class-string>
      */
     private array $widget_classes = array(
-        HeroCRO::class,
-        ProductBuyBox::class,
-        TrustBadges::class,
+        AICopilot::class,
     );
 
     public function __construct(private readonly Dependencies $dependencies)
@@ -41,9 +37,9 @@ final class WidgetsLoader
     public function register_category(\Elementor\Elements_Manager $elements_manager): void
     {
         $elements_manager->add_category(
-            'zhd-cro-blocks',
+            'zhd-ai-copilot',
             array(
-                'title' => __('ZHD CRO Blocks', ZHD_EB_TEXT_DOMAIN),
+                'title' => __('ZHD AI Copilot', ZHD_EB_TEXT_DOMAIN),
                 'icon'  => 'fa fa-plug',
             )
         );
@@ -90,4 +86,3 @@ final class WidgetsLoader
         return $manifest;
     }
 }
-

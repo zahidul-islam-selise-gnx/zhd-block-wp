@@ -374,7 +374,9 @@
 
 .zhd-eb-ai-panel textarea.code,
 .zhd-eb-ai-form textarea,
-.zhd-eb-ai-form input[type="text"] {
+.zhd-eb-ai-form input[type="text"],
+.zhd-eb-ai-form input[type="file"],
+.zhd-eb-ai-form select {
   width: 100%;
   border: 1px solid rgba(36, 107, 255, 0.12);
   border-radius: 18px;
@@ -422,6 +424,30 @@
   font-size: 0.97rem;
 }
 
+.zhd-eb-ai-form select {
+  min-height: 54px;
+  padding: 0 18px;
+  color: #10233f;
+  font-size: 0.97rem;
+}
+
+.zhd-eb-ai-form input[type="file"] {
+  padding: 16px 18px;
+  color: #2f496d;
+  font-size: 0.95rem;
+}
+
+.zhd-eb-ai-form input[type="file"]::file-selector-button {
+  margin-right: 14px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(36, 107, 255, 0.12), rgba(15, 183, 255, 0.12));
+  color: #1650bf;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .zhd-eb-ai-form textarea::placeholder,
 .zhd-eb-ai-form input[type="text"]::placeholder {
   color: #8aa0bd;
@@ -429,6 +455,8 @@
 
 .zhd-eb-ai-form textarea:focus,
 .zhd-eb-ai-form input[type="text"]:focus,
+.zhd-eb-ai-form input[type="file"]:focus,
+.zhd-eb-ai-form select:focus,
 .zhd-eb-ai-panel textarea.code:focus {
   border-color: rgba(36, 107, 255, 0.32);
   outline: none;

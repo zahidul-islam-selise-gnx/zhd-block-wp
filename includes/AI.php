@@ -1,6 +1,6 @@
 <?php
 /**
- * Safe AI schema and preset storage.
+ * AI schema, validation, generation, and preset storage.
  *
  * @package ZHD\ElementorBlocks
  */
@@ -14,6 +14,36 @@ use WP_Error;
 final class AI
 {
     private const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
+    private const DEFAULT_MODEL = 'gpt-5.5';
+    private const MAX_REFERENCE_IMAGES = 6;
+    private const MAX_REFERENCE_IMAGE_BYTES = 8388608;
+    private const MAX_SECTIONS = 12;
+    private const MAX_COLUMNS = 3;
+    private const MAX_ELEMENTS_PER_COLUMN = 12;
+    private const MAX_ICON_LIST_ITEMS = 10;
+    private const MAX_FAQ_ITEMS = 8;
+    private const ALLOWED_REFERENCE_IMAGE_MIME_TYPES = array(
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+    );
+    private const ALLOWED_LAYOUTS = array(
+        'one',
+        'two_equal',
+        'two_left',
+        'two_right',
+        'three_equal',
+    );
+    private const ALLOWED_ELEMENT_TYPES = array(
+        'heading',
+        'text',
+        'button',
+        'image',
+        'icon_list',
+        'spacer',
+        'divider',
+        'faq',
+    );
 
     public function __construct(private readonly Settings $settings)
     {
@@ -25,53 +55,51 @@ final class AI
     public function get_schema(): array
     {
         return array(
-            'schema_version' => 1,
-            'title'          => 'ZHD Safe Layout Schema',
-            'description'    => 'Structured layout payload for AI-assisted design generation. This schema is intentionally limited to known ZHD widgets and sanitized settings.',
+            'schema_version' => 2,
+            'title'          => 'ZHD Elementor Compiler Schema',
+            'description'    => 'Structured layout payload for AI-assisted design generation. Presets compile into native Elementor sections, columns, and core widgets.',
             'output_shape'   => array(
                 'title'       => 'string',
                 'description' => 'string',
                 'source'      => 'manual|openai|import',
-                'blocks'      => 'array<block>',
+                'sections'    => 'array<section>',
             ),
-            'block_shape'    => array(
-                'widget'   => 'allowed ZHD widget slug',
-                'settings' => 'sanitized per widget',
+            'section_shape'  => array(
+                'layout'  => 'one|two_equal|two_left|two_right|three_equal',
+                'columns' => 'array<column>',
             ),
-            'widgets'        => array(
-                'zhd_hero_cro' => array(
-                    'label'       => 'Hero CRO',
-                    'description' => 'Primary conversion hero section.',
-                    'settings'    => array(
-                        'eyebrow'              => 'string',
-                        'heading'              => 'string',
-                        'subheading'           => 'string',
-                        'button_text'          => 'string',
-                        'button_url'           => 'url',
-                        'background_image_url' => 'url',
-                        'overlay_color'        => 'string',
-                    ),
+            'column_shape'   => array(
+                'elements' => 'array<element>',
+            ),
+            'element_types'  => array(
+                'heading' => array(
+                    'text'  => 'string',
+                    'level' => 'h1|h2|h3|h4',
+                    'size'  => 'xl|large|medium|small',
                 ),
-                'zhd_product_buy_box' => array(
-                    'label'       => 'Product Buy Box',
-                    'description' => 'WooCommerce-aware conversion card.',
-                    'settings'    => array(
-                        'product_source'    => 'context|manual',
-                        'manual_product_id' => 'integer',
-                        'override_title'    => 'string',
-                        'guarantee_text'    => 'string',
-                        'stock_label'       => 'string',
-                        'show_description'  => 'boolean',
-                        'trust_badges'      => 'array<string>',
-                    ),
+                'text' => array(
+                    'text' => 'string',
                 ),
-                'zhd_trust_badges' => array(
-                    'label'       => 'Trust Badges',
-                    'description' => 'Credibility items with icon labels.',
-                    'settings'    => array(
-                        'items'   => 'array<{label:string,icon:string}>',
-                        'columns' => '2|3|4',
-                    ),
+                'button' => array(
+                    'text'  => 'string',
+                    'url'   => 'url',
+                    'style' => 'primary|secondary|link',
+                    'align' => 'left|center|right',
+                ),
+                'image' => array(
+                    'image_url' => 'url',
+                    'alt'       => 'string',
+                    'aspect'    => 'portrait|square|landscape',
+                ),
+                'icon_list' => array(
+                    'items' => 'array<{text:string, icon:string}>',
+                ),
+                'spacer' => array(
+                    'size' => 'small|medium|large',
+                ),
+                'divider' => array(),
+                'faq' => array(
+                    'items' => 'array<{question:string, answer:string}>',
                 ),
             ),
         );
@@ -85,116 +113,281 @@ final class AI
         $title = sanitize_text_field((string) ($payload['title'] ?? ''));
         $description = sanitize_textarea_field((string) ($payload['description'] ?? ''));
         $source = sanitize_key((string) ($payload['source'] ?? 'manual'));
-        $blocks = $payload['blocks'] ?? array();
 
         if ('' === $title) {
             return new WP_Error('zhd_ai_missing_title', __('AI preset validation failed: title is required.', ZHD_EB_TEXT_DOMAIN));
-        }
-
-        if (! is_array($blocks) || array() === $blocks) {
-            return new WP_Error('zhd_ai_missing_blocks', __('AI preset validation failed: at least one block is required.', ZHD_EB_TEXT_DOMAIN));
         }
 
         if (! in_array($source, array('manual', 'openai', 'import'), true)) {
             $source = 'manual';
         }
 
-        $sanitized_blocks = array();
+        $sections = $payload['sections'] ?? array();
 
-        foreach (array_slice($blocks, 0, 25) as $block) {
-            if (! is_array($block)) {
-                continue;
+        if (is_array($sections) && array() !== $sections) {
+            $sanitized_sections = $this->sanitize_sections($sections);
+
+            if (array() === $sanitized_sections) {
+                return new WP_Error('zhd_ai_invalid_sections', __('AI preset validation failed: no valid sections were found.', ZHD_EB_TEXT_DOMAIN));
             }
 
-            $widget = sanitize_key((string) ($block['widget'] ?? ''));
-            $settings = is_array($block['settings'] ?? null) ? $block['settings'] : array();
-            $sanitized = $this->sanitize_widget_settings($widget, $settings);
-
-            if (null === $sanitized) {
-                continue;
-            }
-
-            $sanitized_blocks[] = array(
-                'widget'   => $widget,
-                'settings' => $sanitized,
+            return array(
+                'title'       => $title,
+                'description' => $description,
+                'source'      => $source,
+                'sections'    => $sanitized_sections,
             );
         }
 
-        if (array() === $sanitized_blocks) {
-            return new WP_Error('zhd_ai_no_supported_blocks', __('AI preset validation failed: no supported ZHD blocks were found.', ZHD_EB_TEXT_DOMAIN));
+        return new WP_Error('zhd_ai_missing_sections', __('AI preset validation failed: at least one section is required.', ZHD_EB_TEXT_DOMAIN));
+    }
+
+    /**
+     * @param array<int, mixed> $sections
+     * @return array<int, array<string, mixed>>
+     */
+    private function sanitize_sections(array $sections): array
+    {
+        $sanitized_sections = array();
+
+        foreach (array_slice($sections, 0, self::MAX_SECTIONS) as $section) {
+            if (! is_array($section)) {
+                continue;
+            }
+
+            $layout = sanitize_key((string) ($section['layout'] ?? 'one'));
+            if (! in_array($layout, self::ALLOWED_LAYOUTS, true)) {
+                $layout = 'one';
+            }
+
+            $columns = array();
+            foreach (array_slice((array) ($section['columns'] ?? array()), 0, self::MAX_COLUMNS) as $column) {
+                if (! is_array($column)) {
+                    continue;
+                }
+
+                $elements = $this->sanitize_elements((array) ($column['elements'] ?? array()));
+
+                if (array() === $elements) {
+                    continue;
+                }
+
+                $columns[] = array(
+                    'elements' => $elements,
+                );
+            }
+
+            if (array() === $columns) {
+                continue;
+            }
+
+            $sanitized_sections[] = array(
+                'layout'  => $layout,
+                'columns' => $columns,
+            );
         }
 
+        return $sanitized_sections;
+    }
+
+    /**
+     * @param array<int, mixed> $elements
+     * @return array<int, array<string, mixed>>
+     */
+    private function sanitize_elements(array $elements): array
+    {
+        $sanitized_elements = array();
+
+        foreach (array_slice($elements, 0, self::MAX_ELEMENTS_PER_COLUMN) as $element) {
+            if (! is_array($element)) {
+                continue;
+            }
+
+            $type = sanitize_key((string) ($element['type'] ?? ''));
+
+            if (! in_array($type, self::ALLOWED_ELEMENT_TYPES, true)) {
+                continue;
+            }
+
+            $sanitized = match ($type) {
+                'heading' => $this->sanitize_heading_element($element),
+                'text' => $this->sanitize_text_element($element),
+                'button' => $this->sanitize_button_element($element),
+                'image' => $this->sanitize_image_element($element),
+                'icon_list' => $this->sanitize_icon_list_element($element),
+                'spacer' => $this->sanitize_spacer_element($element),
+                'divider' => array('type' => 'divider'),
+                'faq' => $this->sanitize_faq_element($element),
+                default => null,
+            };
+
+            if (null !== $sanitized) {
+                $sanitized_elements[] = $sanitized;
+            }
+        }
+
+        return $sanitized_elements;
+    }
+
+    /**
+     * @param array<string, mixed> $element
+     * @return array<string, mixed>|null
+     */
+    private function sanitize_heading_element(array $element): ?array
+    {
+        $text = sanitize_textarea_field((string) ($element['text'] ?? ''));
+
+        if ('' === $text) {
+            return null;
+        }
+
+        $level = sanitize_key((string) ($element['level'] ?? 'h2'));
+        $size = sanitize_key((string) ($element['size'] ?? 'large'));
+
         return array(
-            'title'       => $title,
-            'description' => $description,
-            'source'      => $source,
-            'blocks'      => $sanitized_blocks,
+            'type'  => 'heading',
+            'text'  => $text,
+            'level' => in_array($level, array('h1', 'h2', 'h3', 'h4'), true) ? $level : 'h2',
+            'size'  => in_array($size, array('xl', 'large', 'medium', 'small'), true) ? $size : 'large',
         );
     }
 
     /**
+     * @param array<string, mixed> $element
      * @return array<string, mixed>|null
      */
-    public function sanitize_widget_settings(string $widget, array $settings): ?array
+    private function sanitize_text_element(array $element): ?array
     {
-        switch ($widget) {
-            case 'zhd_hero_cro':
-                return array(
-                    'eyebrow'              => sanitize_text_field((string) ($settings['eyebrow'] ?? '')),
-                    'heading'              => sanitize_textarea_field((string) ($settings['heading'] ?? '')),
-                    'subheading'           => sanitize_textarea_field((string) ($settings['subheading'] ?? '')),
-                    'button_text'          => sanitize_text_field((string) ($settings['button_text'] ?? '')),
-                    'button_url'           => esc_url_raw((string) ($settings['button_url'] ?? '')),
-                    'background_image_url' => esc_url_raw((string) ($settings['background_image_url'] ?? '')),
-                    'overlay_color'        => sanitize_text_field((string) ($settings['overlay_color'] ?? '')),
-                );
+        $text = sanitize_textarea_field((string) ($element['text'] ?? ''));
 
-            case 'zhd_product_buy_box':
-                $trust_badges = array();
-                foreach ((array) ($settings['trust_badges'] ?? array()) as $badge) {
-                    $badge = sanitize_text_field((string) $badge);
-                    if ('' !== $badge) {
-                        $trust_badges[] = $badge;
-                    }
-                }
+        return '' === $text ? null : array(
+            'type' => 'text',
+            'text' => $text,
+        );
+    }
 
-                return array(
-                    'product_source'    => 'manual' === ($settings['product_source'] ?? 'context') ? 'manual' : 'context',
-                    'manual_product_id' => absint($settings['manual_product_id'] ?? 0),
-                    'override_title'    => sanitize_text_field((string) ($settings['override_title'] ?? '')),
-                    'guarantee_text'    => sanitize_text_field((string) ($settings['guarantee_text'] ?? '')),
-                    'stock_label'       => sanitize_text_field((string) ($settings['stock_label'] ?? '')),
-                    'show_description'  => ! empty($settings['show_description']),
-                    'trust_badges'      => array_slice($trust_badges, 0, 8),
-                );
+    /**
+     * @param array<string, mixed> $element
+     * @return array<string, mixed>|null
+     */
+    private function sanitize_button_element(array $element): ?array
+    {
+        $text = sanitize_text_field((string) ($element['text'] ?? ''));
 
-            case 'zhd_trust_badges':
-                $items = array();
-                foreach ((array) ($settings['items'] ?? array()) as $item) {
-                    if (! is_array($item)) {
-                        continue;
-                    }
-
-                    $label = sanitize_text_field((string) ($item['label'] ?? ''));
-                    $icon = sanitize_text_field((string) ($item['icon'] ?? 'fas fa-check-circle'));
-
-                    if ('' === $label) {
-                        continue;
-                    }
-
-                    $items[] = array(
-                        'label' => $label,
-                        'icon'  => $icon,
-                    );
-                }
-
-                return array(
-                    'items'   => array_slice($items, 0, 8),
-                    'columns' => in_array((string) ($settings['columns'] ?? '3'), array('2', '3', '4'), true) ? (string) $settings['columns'] : '3',
-                );
+        if ('' === $text) {
+            return null;
         }
 
-        return null;
+        $style = sanitize_key((string) ($element['style'] ?? 'primary'));
+        $align = sanitize_key((string) ($element['align'] ?? 'left'));
+
+        return array(
+            'type'  => 'button',
+            'text'  => $text,
+            'url'   => esc_url_raw((string) ($element['url'] ?? '')),
+            'style' => in_array($style, array('primary', 'secondary', 'link'), true) ? $style : 'primary',
+            'align' => in_array($align, array('left', 'center', 'right'), true) ? $align : 'left',
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $element
+     * @return array<string, mixed>|null
+     */
+    private function sanitize_image_element(array $element): ?array
+    {
+        $image_url = esc_url_raw((string) ($element['image_url'] ?? ''));
+
+        if ('' === $image_url) {
+            return null;
+        }
+
+        $aspect = sanitize_key((string) ($element['aspect'] ?? 'landscape'));
+
+        return array(
+            'type'      => 'image',
+            'image_url' => $image_url,
+            'alt'       => sanitize_text_field((string) ($element['alt'] ?? '')),
+            'aspect'    => in_array($aspect, array('portrait', 'square', 'landscape'), true) ? $aspect : 'landscape',
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $element
+     * @return array<string, mixed>|null
+     */
+    private function sanitize_icon_list_element(array $element): ?array
+    {
+        $items = array();
+
+        foreach (array_slice((array) ($element['items'] ?? array()), 0, self::MAX_ICON_LIST_ITEMS) as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $text = sanitize_text_field((string) ($item['text'] ?? ''));
+            $icon = sanitize_text_field((string) ($item['icon'] ?? 'fas fa-check-circle'));
+
+            if ('' === $text) {
+                continue;
+            }
+
+            $items[] = array(
+                'text' => $text,
+                'icon' => '' !== $icon ? $icon : 'fas fa-check-circle',
+            );
+        }
+
+        return array() === $items ? null : array(
+            'type'  => 'icon_list',
+            'items' => $items,
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $element
+     * @return array<string, mixed>
+     */
+    private function sanitize_spacer_element(array $element): array
+    {
+        $size = sanitize_key((string) ($element['size'] ?? 'medium'));
+
+        return array(
+            'type' => 'spacer',
+            'size' => in_array($size, array('small', 'medium', 'large'), true) ? $size : 'medium',
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $element
+     * @return array<string, mixed>|null
+     */
+    private function sanitize_faq_element(array $element): ?array
+    {
+        $items = array();
+
+        foreach (array_slice((array) ($element['items'] ?? array()), 0, self::MAX_FAQ_ITEMS) as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $question = sanitize_text_field((string) ($item['question'] ?? ''));
+            $answer = sanitize_textarea_field((string) ($item['answer'] ?? ''));
+
+            if ('' === $question || '' === $answer) {
+                continue;
+            }
+
+            $items[] = array(
+                'question' => $question,
+                'answer'   => $answer,
+            );
+        }
+
+        return array() === $items ? null : array(
+            'type'  => 'faq',
+            'items' => $items,
+        );
     }
 
     /**
@@ -211,9 +404,11 @@ final class AI
 
         $presets = $this->get_presets();
         $slug_base = sanitize_title($validated['title']);
+
         if ('' === $slug_base) {
             $slug_base = 'preset';
         }
+
         $slug = $slug_base;
         $suffix = 2;
 
@@ -250,34 +445,94 @@ final class AI
     {
         return (string) wp_json_encode(
             array(
-                'title'       => 'High-converting biotech hero stack',
-                'description' => 'Example structured payload for a safe AI-generated landing section.',
+                'title'       => 'Premium biotech supplement landing flow',
+                'description' => 'Example structured payload for an AI-generated Elementor-ready preset.',
                 'source'      => 'openai',
-                'blocks'      => array(
+                'sections'    => array(
                     array(
-                        'widget'   => 'zhd_hero_cro',
-                        'settings' => array(
-                            'eyebrow'              => 'Science-backed conversion system',
-                            'heading'              => 'Launch faster with reusable CRO blocks.',
-                            'subheading'           => 'Use the shared ZHD widgets to keep copy, design, and trust signals consistent.',
-                            'button_text'          => 'See the block system',
-                            'button_url'           => 'https://example.com',
-                            'background_image_url' => 'https://example.com/hero.jpg',
-                            'overlay_color'        => 'rgba(15, 23, 42, 0.78)',
+                        'layout'  => 'two_left',
+                        'columns' => array(
+                            array(
+                                'elements' => array(
+                                    array(
+                                        'type'  => 'heading',
+                                        'text'  => 'Clinically grounded nootropic support with cleaner conversion structure.',
+                                        'level' => 'h1',
+                                        'size'  => 'xl',
+                                    ),
+                                    array(
+                                        'type' => 'text',
+                                        'text' => 'Use the uploaded references as a premium design starting point, then simplify the message and emphasize the core CTA.',
+                                    ),
+                                    array(
+                                        'type'  => 'button',
+                                        'text'  => 'Start your subscription',
+                                        'url'   => 'https://example.com',
+                                        'style' => 'primary',
+                                        'align' => 'left',
+                                    ),
+                                ),
+                            ),
+                            array(
+                                'elements' => array(
+                                    array(
+                                        'type'      => 'image',
+                                        'image_url' => 'https://example.com/hero.jpg',
+                                        'alt'       => 'Supplement bottle hero shot',
+                                        'aspect'    => 'portrait',
+                                    ),
+                                ),
+                            ),
                         ),
                     ),
                     array(
-                        'widget'   => 'zhd_trust_badges',
-                        'settings' => array(
-                            'columns' => '3',
-                            'items'   => array(
-                                array(
-                                    'label' => 'Third-party tested',
-                                    'icon'  => 'fas fa-flask',
+                        'layout'  => 'three_equal',
+                        'columns' => array(
+                            array(
+                                'elements' => array(
+                                    array(
+                                        'type'  => 'icon_list',
+                                        'items' => array(
+                                            array(
+                                                'text' => 'Third-party tested',
+                                                'icon' => 'fas fa-flask',
+                                            ),
+                                            array(
+                                                'text' => 'Fast dispatch',
+                                                'icon' => 'fas fa-truck-fast',
+                                            ),
+                                        ),
+                                    ),
                                 ),
-                                array(
-                                    'label' => 'Secure checkout',
-                                    'icon'  => 'fas fa-lock',
+                            ),
+                            array(
+                                'elements' => array(
+                                    array(
+                                        'type'  => 'icon_list',
+                                        'items' => array(
+                                            array(
+                                                'text' => 'Transparent ingredients',
+                                                'icon' => 'fas fa-leaf',
+                                            ),
+                                            array(
+                                                'text' => 'Secure checkout',
+                                                'icon' => 'fas fa-lock',
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                            array(
+                                'elements' => array(
+                                    array(
+                                        'type'  => 'icon_list',
+                                        'items' => array(
+                                            array(
+                                                'text' => '30-day guarantee',
+                                                'icon' => 'fas fa-shield-heart',
+                                            ),
+                                        ),
+                                    ),
                                 ),
                             ),
                         ),
@@ -311,10 +566,29 @@ final class AI
     }
 
     /**
+     * @return array<string, string>
+     */
+    public function get_available_models(): array
+    {
+        return array(
+            'gpt-5.5' => __('GPT-5.5 (Latest flagship)', ZHD_EB_TEXT_DOMAIN),
+            'gpt-5.5-pro' => __('GPT-5.5 Pro', ZHD_EB_TEXT_DOMAIN),
+            'gpt-5.4' => __('GPT-5.4', ZHD_EB_TEXT_DOMAIN),
+            'gpt-5.4-mini' => __('GPT-5.4 mini', ZHD_EB_TEXT_DOMAIN),
+            'gpt-5.4-nano' => __('GPT-5.4 nano', ZHD_EB_TEXT_DOMAIN),
+            'gpt-5.2-chat-latest' => __('GPT-5.2 Chat Latest', ZHD_EB_TEXT_DOMAIN),
+            'gpt-5.1' => __('GPT-5.1', ZHD_EB_TEXT_DOMAIN),
+            'gpt-5-mini' => __('GPT-5 mini', ZHD_EB_TEXT_DOMAIN),
+            'gpt-4.1' => __('GPT-4.1', ZHD_EB_TEXT_DOMAIN),
+            'gpt-4.1-mini' => __('GPT-4.1 mini', ZHD_EB_TEXT_DOMAIN),
+        );
+    }
+
+    /**
      * @param array<string, mixed> $input
      * @return array<string, mixed>|WP_Error
      */
-    public function generate_preset_from_brief(array $input)
+    public function generate_preset_from_brief(array $input, array $files = array())
     {
         if (! $this->is_generation_configured()) {
             return new WP_Error('zhd_ai_not_configured', __('OpenAI generation is not configured yet. Add an API key or a proxy endpoint in the plugin settings first.', ZHD_EB_TEXT_DOMAIN));
@@ -323,13 +597,20 @@ final class AI
         $brief = sanitize_textarea_field((string) ($input['brief'] ?? ''));
         $business_context = sanitize_textarea_field((string) ($input['business_context'] ?? ''));
         $cta_goal = sanitize_text_field((string) ($input['cta_goal'] ?? ''));
+        $visual_direction = sanitize_textarea_field((string) ($input['visual_direction'] ?? ''));
+        $model = $this->resolve_model((string) ($input['generation_model'] ?? ''));
+        $reference_images = $this->prepare_reference_images($files['reference_screenshots'] ?? null);
 
-        if ('' === $brief) {
-            return new WP_Error('zhd_ai_missing_brief', __('Please provide a design brief before generating a preset.', ZHD_EB_TEXT_DOMAIN));
+        if (is_wp_error($reference_images)) {
+            return $reference_images;
+        }
+
+        if ('' === $brief && array() === $reference_images) {
+            return new WP_Error('zhd_ai_missing_input', __('Please provide a design brief, screenshot references, or both before generating a preset.', ZHD_EB_TEXT_DOMAIN));
         }
 
         $request_body = array(
-            'model' => $this->get_model(),
+            'model' => $model,
             'input' => array(
                 array(
                     'role'    => 'system',
@@ -342,56 +623,24 @@ final class AI
                 ),
                 array(
                     'role'    => 'user',
-                    'content' => array(
-                        array(
-                            'type' => 'input_text',
-                            'text' => $this->build_user_prompt($brief, $business_context, $cta_goal),
-                        ),
-                    ),
+                    'content' => $this->build_user_content($brief, $business_context, $cta_goal, $visual_direction, $reference_images),
                 ),
             ),
             'text'  => array(
                 'format' => array(
                     'type'        => 'json_schema',
-                    'name'        => 'zhd_safe_layout',
-                    'description' => 'Structured layout payload for ZHD Elementor Blocks',
+                    'name'        => 'zhd_elementor_layout',
+                    'description' => 'Structured Elementor-friendly layout payload for ZHD Elementor Blocks',
                     'strict'      => true,
                     'schema'      => $this->get_generation_json_schema(),
                 ),
             ),
         );
 
-        $response = wp_remote_post(
-            $this->get_endpoint(),
-            array(
-                'timeout' => 45,
-                'headers' => $this->get_request_headers(),
-                'body'    => wp_json_encode($request_body),
-            )
-        );
+        $json = $this->request_structured_generation($request_body);
 
-        if (is_wp_error($response)) {
-            return new WP_Error('zhd_ai_request_failed', $response->get_error_message());
-        }
-
-        $status = (int) wp_remote_retrieve_response_code($response);
-        $body   = (string) wp_remote_retrieve_body($response);
-        $json   = json_decode($body, true);
-
-        if ($status < 200 || $status >= 300) {
-            return new WP_Error(
-                'zhd_ai_http_error',
-                sprintf(
-                    /* translators: 1: HTTP status code, 2: API error message */
-                    __('OpenAI generation failed (%1$s): %2$s', ZHD_EB_TEXT_DOMAIN),
-                    (string) $status,
-                    $this->extract_api_error_message($json)
-                )
-            );
-        }
-
-        if (! is_array($json)) {
-            return new WP_Error('zhd_ai_invalid_response', __('OpenAI generation returned an unreadable response body.', ZHD_EB_TEXT_DOMAIN));
+        if (is_wp_error($json)) {
+            return $json;
         }
 
         $output_text = $this->extract_output_text($json);
@@ -414,12 +663,172 @@ final class AI
         }
 
         $save_result['meta'] = array(
-            'model'       => $this->get_model(),
-            'response_id' => sanitize_text_field((string) ($json['id'] ?? '')),
-            'status'      => sanitize_text_field((string) ($json['status'] ?? 'completed')),
+            'model'            => $model,
+            'response_id'      => sanitize_text_field((string) ($json['id'] ?? '')),
+            'status'           => sanitize_text_field((string) ($json['status'] ?? 'completed')),
+            'reference_images' => count($reference_images),
         );
 
         return $save_result;
+    }
+
+    /**
+     * @param array<string, mixed> $request_body
+     * @return array<string, mixed>|WP_Error
+     */
+    private function request_structured_generation(array $request_body)
+    {
+        $response = wp_remote_post(
+            $this->get_endpoint(),
+            array(
+                'timeout' => 45,
+                'headers' => $this->get_request_headers(),
+                'body'    => wp_json_encode($request_body),
+            )
+        );
+
+        if (is_wp_error($response)) {
+            return new WP_Error('zhd_ai_request_failed', $response->get_error_message());
+        }
+
+        $status = (int) wp_remote_retrieve_response_code($response);
+        $body = (string) wp_remote_retrieve_body($response);
+        $json = json_decode($body, true);
+
+        if ($status < 200 || $status >= 300) {
+            return new WP_Error(
+                'zhd_ai_http_error',
+                sprintf(
+                    /* translators: 1: HTTP status code, 2: API error message */
+                    __('OpenAI generation failed (%1$s): %2$s', ZHD_EB_TEXT_DOMAIN),
+                    (string) $status,
+                    $this->extract_api_error_message($json)
+                )
+            );
+        }
+
+        if (! is_array($json)) {
+            return new WP_Error('zhd_ai_invalid_response', __('OpenAI generation returned an unreadable response body.', ZHD_EB_TEXT_DOMAIN));
+        }
+
+        return $json;
+    }
+
+    /**
+     * @param array<int, array<string, string>> $reference_images
+     * @return array<int, array<string, string|int>>
+     */
+    private function build_user_content(string $brief, string $business_context, string $cta_goal, string $visual_direction, array $reference_images): array
+    {
+        $content = array(
+            array(
+                'type' => 'input_text',
+                'text' => $this->build_user_prompt($brief, $business_context, $cta_goal, $visual_direction, count($reference_images)),
+            ),
+        );
+
+        foreach ($reference_images as $index => $reference_image) {
+            $content[] = array(
+                'type'      => 'input_image',
+                'image_url' => $reference_image['data_url'],
+                'detail'    => 'high',
+            );
+
+            $content[] = array(
+                'type' => 'input_text',
+                'text' => sprintf(
+                    /* translators: 1: image number, 2: file name */
+                    __('Reference image %1$d filename: %2$s', ZHD_EB_TEXT_DOMAIN),
+                    $index + 1,
+                    $reference_image['name']
+                ),
+            );
+        }
+
+        return $content;
+    }
+
+    /**
+     * @param mixed $uploaded_files
+     * @return array<int, array{name: string, mime: string, data_url: string}>|WP_Error
+     */
+    private function prepare_reference_images($uploaded_files)
+    {
+        if (! is_array($uploaded_files) || ! isset($uploaded_files['name']) || ! is_array($uploaded_files['name'])) {
+            return array();
+        }
+
+        $names = $uploaded_files['name'];
+        $tmp_names = $uploaded_files['tmp_name'] ?? array();
+        $errors = $uploaded_files['error'] ?? array();
+        $sizes = $uploaded_files['size'] ?? array();
+
+        $reference_images = array();
+
+        foreach ($names as $index => $name) {
+            $name = sanitize_file_name((string) $name);
+            $tmp_name = (string) ($tmp_names[$index] ?? '');
+            $error = (int) ($errors[$index] ?? UPLOAD_ERR_NO_FILE);
+            $size = (int) ($sizes[$index] ?? 0);
+
+            if (UPLOAD_ERR_NO_FILE === $error || '' === $name) {
+                continue;
+            }
+
+            if (UPLOAD_ERR_OK !== $error) {
+                return new WP_Error('zhd_ai_upload_error', __('One of the uploaded screenshots could not be processed. Please try again with fresh image files.', ZHD_EB_TEXT_DOMAIN));
+            }
+
+            if ($size <= 0 || $size > self::MAX_REFERENCE_IMAGE_BYTES) {
+                return new WP_Error(
+                    'zhd_ai_upload_too_large',
+                    sprintf(
+                        /* translators: %s: size limit */
+                        __('Each screenshot must be smaller than %s.', ZHD_EB_TEXT_DOMAIN),
+                        size_format(self::MAX_REFERENCE_IMAGE_BYTES)
+                    )
+                );
+            }
+
+            if ('' === $tmp_name || ! file_exists($tmp_name)) {
+                return new WP_Error('zhd_ai_upload_missing_file', __('A screenshot upload was missing its temporary file. Please retry the upload.', ZHD_EB_TEXT_DOMAIN));
+            }
+
+            $image_info = wp_getimagesize($tmp_name);
+            $mime_type = is_array($image_info) && isset($image_info['mime']) ? (string) $image_info['mime'] : '';
+
+            if (! in_array($mime_type, self::ALLOWED_REFERENCE_IMAGE_MIME_TYPES, true)) {
+                return new WP_Error('zhd_ai_upload_invalid_type', __('Only PNG, JPG, and WebP screenshots are supported right now.', ZHD_EB_TEXT_DOMAIN));
+            }
+
+            $bytes = file_get_contents($tmp_name);
+
+            if (false === $bytes || '' === $bytes) {
+                return new WP_Error('zhd_ai_upload_unreadable', __('One of the screenshot files could not be read. Please retry with a different image export.', ZHD_EB_TEXT_DOMAIN));
+            }
+
+            $reference_images[] = array(
+                'name'     => $name,
+                'mime'     => $mime_type,
+                'data_url' => 'data:' . $mime_type . ';base64,' . base64_encode($bytes),
+            );
+
+            if (count($reference_images) >= self::MAX_REFERENCE_IMAGES) {
+                break;
+            }
+        }
+
+        return $reference_images;
+    }
+
+    public function get_reference_limits_description(): string
+    {
+        return sprintf(
+            /* translators: 1: image count, 2: size limit */
+            __('Upload up to %1$d screenshots. Supported formats: PNG, JPG, WebP. Max file size per screenshot: %2$s.', ZHD_EB_TEXT_DOMAIN),
+            self::MAX_REFERENCE_IMAGES,
+            size_format(self::MAX_REFERENCE_IMAGE_BYTES)
+        );
     }
 
     /**
@@ -430,7 +839,7 @@ final class AI
         return array(
             'type'                 => 'object',
             'additionalProperties' => false,
-            'required'             => array('title', 'description', 'source', 'blocks'),
+            'required'             => array('title', 'description', 'source', 'sections'),
             'properties'           => array(
                 'title'       => array(
                     'type' => 'string',
@@ -442,124 +851,178 @@ final class AI
                     'type' => 'string',
                     'enum' => array('openai'),
                 ),
-                'blocks'      => array(
+                'sections'    => array(
+                    'type'  => 'array',
+                    'items' => $this->get_generation_section_schema(),
+                ),
+            ),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function get_generation_section_schema(): array
+    {
+        return array(
+            'type'                 => 'object',
+            'additionalProperties' => false,
+            'required'             => array('layout', 'columns'),
+            'properties'           => array(
+                'layout'  => array(
+                    'type' => 'string',
+                    'enum' => self::ALLOWED_LAYOUTS,
+                ),
+                'columns' => array(
                     'type'  => 'array',
                     'items' => array(
-                        'anyOf' => array(
-                            $this->get_hero_block_schema(),
-                            $this->get_buy_box_block_schema(),
-                            $this->get_trust_badges_block_schema(),
-                        ),
-                    ),
-                ),
-            ),
-        );
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function get_hero_block_schema(): array
-    {
-        return array(
-            'type'                 => 'object',
-            'additionalProperties' => false,
-            'required'             => array('widget', 'settings'),
-            'properties'           => array(
-                'widget'   => array(
-                    'type' => 'string',
-                    'enum' => array('zhd_hero_cro'),
-                ),
-                'settings' => array(
-                    'type'                 => 'object',
-                    'additionalProperties' => false,
-                    'required'             => array('eyebrow', 'heading', 'subheading', 'button_text', 'button_url', 'background_image_url', 'overlay_color'),
-                    'properties'           => array(
-                        'eyebrow'              => array('type' => 'string'),
-                        'heading'              => array('type' => 'string'),
-                        'subheading'           => array('type' => 'string'),
-                        'button_text'          => array('type' => 'string'),
-                        'button_url'           => array('type' => 'string'),
-                        'background_image_url' => array('type' => 'string'),
-                        'overlay_color'        => array('type' => 'string'),
-                    ),
-                ),
-            ),
-        );
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function get_buy_box_block_schema(): array
-    {
-        return array(
-            'type'                 => 'object',
-            'additionalProperties' => false,
-            'required'             => array('widget', 'settings'),
-            'properties'           => array(
-                'widget'   => array(
-                    'type' => 'string',
-                    'enum' => array('zhd_product_buy_box'),
-                ),
-                'settings' => array(
-                    'type'                 => 'object',
-                    'additionalProperties' => false,
-                    'required'             => array('product_source', 'manual_product_id', 'override_title', 'guarantee_text', 'stock_label', 'show_description', 'trust_badges'),
-                    'properties'           => array(
-                        'product_source'    => array(
-                            'type' => 'string',
-                            'enum' => array('context', 'manual'),
-                        ),
-                        'manual_product_id' => array('type' => 'integer'),
-                        'override_title'    => array('type' => 'string'),
-                        'guarantee_text'    => array('type' => 'string'),
-                        'stock_label'       => array('type' => 'string'),
-                        'show_description'  => array('type' => 'boolean'),
-                        'trust_badges'      => array(
-                            'type'  => 'array',
-                            'items' => array('type' => 'string'),
-                        ),
-                    ),
-                ),
-            ),
-        );
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function get_trust_badges_block_schema(): array
-    {
-        return array(
-            'type'                 => 'object',
-            'additionalProperties' => false,
-            'required'             => array('widget', 'settings'),
-            'properties'           => array(
-                'widget'   => array(
-                    'type' => 'string',
-                    'enum' => array('zhd_trust_badges'),
-                ),
-                'settings' => array(
-                    'type'                 => 'object',
-                    'additionalProperties' => false,
-                    'required'             => array('items', 'columns'),
-                    'properties'           => array(
-                        'items'   => array(
-                            'type'  => 'array',
-                            'items' => array(
-                                'type'                 => 'object',
-                                'additionalProperties' => false,
-                                'required'             => array('label', 'icon'),
-                                'properties'           => array(
-                                    'label' => array('type' => 'string'),
-                                    'icon'  => array('type' => 'string'),
+                        'type'                 => 'object',
+                        'additionalProperties' => false,
+                        'required'             => array('elements'),
+                        'properties'           => array(
+                            'elements' => array(
+                                'type'  => 'array',
+                                'items' => array(
+                                    'anyOf' => array(
+                                        $this->get_heading_element_schema(),
+                                        $this->get_text_element_schema(),
+                                        $this->get_button_element_schema(),
+                                        $this->get_image_element_schema(),
+                                        $this->get_icon_list_element_schema(),
+                                        $this->get_spacer_element_schema(),
+                                        $this->get_divider_element_schema(),
+                                        $this->get_faq_element_schema(),
+                                    ),
                                 ),
                             ),
                         ),
-                        'columns' => array(
-                            'type' => 'string',
-                            'enum' => array('2', '3', '4'),
+                    ),
+                ),
+            ),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function get_heading_element_schema(): array
+    {
+        return array(
+            'type'                 => 'object',
+            'additionalProperties' => false,
+            'required'             => array('type', 'text', 'level', 'size'),
+            'properties'           => array(
+                'type'  => array(
+                    'type' => 'string',
+                    'enum' => array('heading'),
+                ),
+                'text'  => array('type' => 'string'),
+                'level' => array(
+                    'type' => 'string',
+                    'enum' => array('h1', 'h2', 'h3', 'h4'),
+                ),
+                'size'  => array(
+                    'type' => 'string',
+                    'enum' => array('xl', 'large', 'medium', 'small'),
+                ),
+            ),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function get_text_element_schema(): array
+    {
+        return array(
+            'type'                 => 'object',
+            'additionalProperties' => false,
+            'required'             => array('type', 'text'),
+            'properties'           => array(
+                'type' => array(
+                    'type' => 'string',
+                    'enum' => array('text'),
+                ),
+                'text' => array('type' => 'string'),
+            ),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function get_button_element_schema(): array
+    {
+        return array(
+            'type'                 => 'object',
+            'additionalProperties' => false,
+            'required'             => array('type', 'text', 'url', 'style', 'align'),
+            'properties'           => array(
+                'type'  => array(
+                    'type' => 'string',
+                    'enum' => array('button'),
+                ),
+                'text'  => array('type' => 'string'),
+                'url'   => array('type' => 'string'),
+                'style' => array(
+                    'type' => 'string',
+                    'enum' => array('primary', 'secondary', 'link'),
+                ),
+                'align' => array(
+                    'type' => 'string',
+                    'enum' => array('left', 'center', 'right'),
+                ),
+            ),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function get_image_element_schema(): array
+    {
+        return array(
+            'type'                 => 'object',
+            'additionalProperties' => false,
+            'required'             => array('type', 'image_url', 'alt', 'aspect'),
+            'properties'           => array(
+                'type'      => array(
+                    'type' => 'string',
+                    'enum' => array('image'),
+                ),
+                'image_url' => array('type' => 'string'),
+                'alt'       => array('type' => 'string'),
+                'aspect'    => array(
+                    'type' => 'string',
+                    'enum' => array('portrait', 'square', 'landscape'),
+                ),
+            ),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function get_icon_list_element_schema(): array
+    {
+        return array(
+            'type'                 => 'object',
+            'additionalProperties' => false,
+            'required'             => array('type', 'items'),
+            'properties'           => array(
+                'type'  => array(
+                    'type' => 'string',
+                    'enum' => array('icon_list'),
+                ),
+                'items' => array(
+                    'type'  => 'array',
+                    'items' => array(
+                        'type'                 => 'object',
+                        'additionalProperties' => false,
+                        'required'             => array('text', 'icon'),
+                        'properties'           => array(
+                            'text' => array('type' => 'string'),
+                            'icon' => array('type' => 'string'),
                         ),
                     ),
                 ),
@@ -567,11 +1030,104 @@ final class AI
         );
     }
 
-    private function get_model(): string
+    /**
+     * @return array<string, mixed>
+     */
+    private function get_spacer_element_schema(): array
+    {
+        return array(
+            'type'                 => 'object',
+            'additionalProperties' => false,
+            'required'             => array('type', 'size'),
+            'properties'           => array(
+                'type' => array(
+                    'type' => 'string',
+                    'enum' => array('spacer'),
+                ),
+                'size' => array(
+                    'type' => 'string',
+                    'enum' => array('small', 'medium', 'large'),
+                ),
+            ),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function get_divider_element_schema(): array
+    {
+        return array(
+            'type'                 => 'object',
+            'additionalProperties' => false,
+            'required'             => array('type'),
+            'properties'           => array(
+                'type' => array(
+                    'type' => 'string',
+                    'enum' => array('divider'),
+                ),
+            ),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function get_faq_element_schema(): array
+    {
+        return array(
+            'type'                 => 'object',
+            'additionalProperties' => false,
+            'required'             => array('type', 'items'),
+            'properties'           => array(
+                'type'  => array(
+                    'type' => 'string',
+                    'enum' => array('faq'),
+                ),
+                'items' => array(
+                    'type'  => 'array',
+                    'items' => array(
+                        'type'                 => 'object',
+                        'additionalProperties' => false,
+                        'required'             => array('question', 'answer'),
+                        'properties'           => array(
+                            'question' => array('type' => 'string'),
+                            'answer'   => array('type' => 'string'),
+                        ),
+                    ),
+                ),
+            ),
+        );
+    }
+
+    public function get_preferred_model(): string
     {
         $settings = $this->settings->get_plugin_settings();
 
-        return (string) ($settings['openai_model'] ?? 'gpt-5.5');
+        return $this->resolve_model((string) ($settings['openai_model'] ?? self::DEFAULT_MODEL));
+    }
+
+    private function resolve_model(string $requested_model = ''): string
+    {
+        $requested_model = sanitize_text_field($requested_model);
+        $available_models = $this->get_available_models();
+
+        if ('' !== $requested_model) {
+            if (isset($available_models[$requested_model])) {
+                return $requested_model;
+            }
+
+            return $requested_model;
+        }
+
+        $settings = $this->settings->get_plugin_settings();
+        $preferred = sanitize_text_field((string) ($settings['openai_model'] ?? self::DEFAULT_MODEL));
+
+        if (isset($available_models[$preferred])) {
+            return $preferred;
+        }
+
+        return self::DEFAULT_MODEL;
     }
 
     private function get_endpoint(): string
@@ -605,32 +1161,36 @@ final class AI
         return implode(
             "\n",
             array(
-                'You generate safe, conversion-focused layout presets for a WordPress Elementor plugin.',
+                'You generate conversion-focused layout presets for a WordPress plugin that compiles them into native Elementor templates.',
                 'Return only a structured JSON object matching the provided schema.',
-                'Use only supported ZHD widgets: zhd_hero_cro, zhd_product_buy_box, zhd_trust_badges.',
-                'Prefer 2 to 3 blocks unless the brief clearly needs less.',
-                'Keep the layout practical for marketing pages and product pages.',
-                'If the brief is not product-specific, avoid the Product Buy Box widget.',
-                'Use concise, high-converting copy and keep trust badges specific and believable.',
+                'Do not use plugin-specific widgets unless the schema explicitly asks for them.',
+                'Build layouts using sections, columns, and Elementor-friendly elements like heading, text, button, image, icon_list, spacer, divider, and faq.',
+                'Prefer 2 to 6 sections unless the brief clearly needs fewer.',
+                'When screenshots are provided, use them as layout and hierarchy references from top to bottom.',
+                'Preserve the overall section sequence and information architecture, but improve the copy for CRO clarity.',
+                'If something in a screenshot is too bespoke to reproduce exactly, simplify it into the closest supported Elementor-friendly structure.',
                 'Set source to openai.',
             )
         );
     }
 
-    private function build_user_prompt(string $brief, string $business_context, string $cta_goal): string
+    private function build_user_prompt(string $brief, string $business_context, string $cta_goal, string $visual_direction, int $reference_image_count): string
     {
         return wp_json_encode(
             array(
-                'task'             => 'Generate a safe ZHD layout preset from this brief.',
+                'task'             => 0 === $reference_image_count ? 'Generate a native-Elementor-ready layout preset from this brief.' : 'Generate a native-Elementor-ready layout preset using the brief and uploaded screenshot references.',
                 'brief'            => $brief,
                 'business_context' => $business_context,
                 'cta_goal'         => $cta_goal,
+                'visual_direction' => $visual_direction,
+                'reference_images' => $reference_image_count,
                 'rules'            => array(
-                    'Do not invent unsupported widgets.',
                     'Do not output raw Elementor JSON.',
+                    'Do not invent unsupported element types.',
+                    'Use sections and columns to express major layout changes.',
                     'Use valid URLs or empty strings for URL fields.',
-                    'Use manual_product_id 0 when no manual product is intended.',
                     'Assume visual defaults should inherit from Elementor global styles or the active theme.',
+                    'Treat screenshots as inspiration for structure and rhythm, not a requirement for pixel-perfect cloning.',
                 ),
             ),
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES

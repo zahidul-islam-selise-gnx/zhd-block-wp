@@ -41,7 +41,7 @@ final class Dependencies
         if (! $this->is_elementor_installed()) {
             $notices[] = array(
                 'type'    => 'warning',
-                'message' => __('ZHD Elementor Blocks is installed, but Elementor is not active. Widget registration and template importing are paused until Elementor is available.', ZHD_EB_TEXT_DOMAIN),
+                'message' => __('ZHD Elementor Blocks is installed, but Elementor is not active. The AI copilot workspace and Elementor-library compiler are paused until Elementor is available.', ZHD_EB_TEXT_DOMAIN),
             );
         } elseif (! $this->is_elementor_version_supported()) {
             $notices[] = array(
@@ -51,13 +51,6 @@ final class Dependencies
                     __('ZHD Elementor Blocks requires Elementor %s or newer.', ZHD_EB_TEXT_DOMAIN),
                     ZHD_EB_MINIMUM_ELEMENTOR_VERSION
                 ),
-            );
-        }
-
-        if ($this->is_elementor_ready() && ! $this->is_woocommerce_ready()) {
-            $notices[] = array(
-                'type'    => 'info',
-                'message' => __('WooCommerce is not active. Woo-aware widgets such as Product Buy Box will stay hidden until WooCommerce is available.', ZHD_EB_TEXT_DOMAIN),
             );
         }
 
@@ -119,9 +112,6 @@ final class Dependencies
             'elementor'   => $this->is_elementor_installed()
                 ? $this->version_label((string) (defined('ELEMENTOR_VERSION') ? ELEMENTOR_VERSION : '0'), ZHD_EB_MINIMUM_ELEMENTOR_VERSION)
                 : __('Missing', ZHD_EB_TEXT_DOMAIN),
-            'woocommerce' => $this->is_woocommerce_ready()
-                ? $this->version_label((string) WC_VERSION, ZHD_EB_MINIMUM_WOOCOMMERCE_VERSION)
-                : __('Optional / inactive', ZHD_EB_TEXT_DOMAIN),
         );
     }
 
